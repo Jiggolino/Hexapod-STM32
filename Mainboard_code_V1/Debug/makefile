@@ -61,8 +61,8 @@ all: main-build
 main-build: Mainboard_code_V1.elf secondary-outputs
 
 # Tool invocations
-Mainboard_code_V1.elf Mainboard_code_V1.map: $(OBJS) $(USER_OBJS) /home/linus/Desktop/TBZ/Hexapod/firmware/Mainboard_code_V1/STM32H743ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "Mainboard_code_V1.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"/home/linus/Desktop/TBZ/Hexapod/firmware/Mainboard_code_V1/STM32H743ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Mainboard_code_V1.map" -Wl,--gc-sections -static -u _scanf_float -u _printf_float --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Mainboard_code_V1.elf Mainboard_code_V1.map: $(OBJS) $(USER_OBJS) /home/linus/Desktop/TBZ/Hexapod/firmware/Hexapod-STM32/Mainboard_code_V1/STM32H743ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Mainboard_code_V1.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"/home/linus/Desktop/TBZ/Hexapod/firmware/Hexapod-STM32/Mainboard_code_V1/STM32H743ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Mainboard_code_V1.map" -Wl,--gc-sections -static -u _scanf_float -u _printf_float --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
