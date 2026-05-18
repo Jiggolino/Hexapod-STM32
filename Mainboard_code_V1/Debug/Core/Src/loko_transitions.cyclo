@@ -1,0 +1,13 @@
+../Core/Inc/loko_input.h:84:23:loko_pressed	3
+../Core/Inc/loko_input.h:90:23:loko_held	1
+../Core/Inc/loko_input.h:96:23:loko_released	3
+../Core/Inc/loko_input.h:102:21:loko_axis	1
+../Core/Src/loko_transitions.c:37:13:transition_un_armed	2
+../Core/Src/loko_transitions.c:52:13:transition_stand	9
+../Core/Src/loko_transitions.c:78:13:transition_walk	9
+../Core/Src/loko_transitions.c:104:13:transition_walk_4_legs	3
+../Core/Src/loko_transitions.c:116:13:transition_stand_4_legs	3
+../Core/Src/loko_transitions.c:128:13:transition_rotate_in_place	2
+../Core/Src/loko_transitions.c:134:13:transition_dancing	2
+../Core/Src/loko_transitions.c:142:6:loko_update_transitions	10
+../Core/Src/loko_transitions.c:165:13:Set_servo_default	2

@@ -1,0 +1,12 @@
+../Core/Src/trajectory_calculator.c:17:13:eval_segment	104	static
+../Core/Src/trajectory_calculator.c:70:13:rebuild	72	static
+../Core/Src/trajectory_calculator.c:104:6:hexleg_init	40	static
+../Core/Src/trajectory_calculator.c:115:6:hexleg_set_params	32	static
+../Core/Src/trajectory_calculator.c:124:6:hexleg_set_icr	16	static
+../Core/Src/trajectory_calculator.c:131:6:hexleg_set_time_weights	32	static
+../Core/Src/trajectory_calculator.c:144:14:invert_arc_length	48	static
+../Core/Src/trajectory_calculator.c:163:6:hexleg_point_at	96	static
+../Core/Src/trajectory_calculator.c:226:6:hexleg_path	32	static
+../Core/Src/trajectory_calculator.c:242:7:hexleg_icr_signed_radius	56	static
+../Core/Src/trajectory_calculator.c:255:7:hexleg_icr_compute	72	static
+../Core/Src/trajectory_calculator.c:288:6:hexleg_segment_path	80	static

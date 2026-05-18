@@ -1,0 +1,4 @@
+../Core/Src/uart_dma_tx.c:17:13:start_dma_transfer	6
+../Core/Src/uart_dma_tx.c:47:6:HAL_UART_TxCpltCallback	2
+../Core/Src/uart_dma_tx.c:60:6:uart_dma_tx_init	1
+../Core/Src/uart_dma_tx.c:71:6:uart_dma_tx_send	5

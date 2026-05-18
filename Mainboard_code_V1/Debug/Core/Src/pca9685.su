@@ -1,0 +1,11 @@
+../Core/Src/pca9685.c:22:13:i2c_recover	16	static
+../Core/Src/pca9685.c:30:26:write_reg	40	static
+../Core/Src/pca9685.c:43:26:read_reg	40	static
+../Core/Src/pca9685.c:60:19:PCA9685_SoftwareReset	32	static
+../Core/Src/pca9685.c:66:19:PCA9685_Init	24	static
+../Core/Src/pca9685.c:87:19:PCA9685_SetFrequency	32	static
+../Core/Src/pca9685.c:126:19:PCA9685_SetPWM	40	static
+../Core/Src/pca9685.c:138:19:PCA9685_SetServoPulse	24	static
+../Core/Src/pca9685.c:151:19:PCA9685_SetServoAngle	32	static
+../Core/Src/pca9685.c:195:6:PCA9685_Sleep	24	static
+../Core/Src/pca9685.c:202:6:PCA9685_Wake	24	static

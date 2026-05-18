@@ -1,0 +1,10 @@
+12:40:52.989  INFO     Connecting to 100.122.9.49:5000...
+12:40:53.567  INFO     Network connection established
+12:40:53.567  INFO     RX        /BATTERY/VDDA/12855 mV
+12:40:53.567  INFO     RX        === Hexapod Mainboard ===
+12:40:54.248  INFO     RX        PCA9685 Right: FAIL
+12:40:54.298  INFO     RX        PCA9685 Left:  FAIL
+12:40:54.446  INFO     RX        LSM6DSO16IS IMU (filtered): DISABLED
+12:40:54.567  DEBUG    TX /CONTROLL/0,0,0,0,0,0,0,0,0
+12:40:56.175  DEBUG    TX /CONTROLL/0,0,0,0,0,0,0,0,0
+12:40:57.784  DEBUG    TX /CONTROLL/0,0,0,0,0,0,0,0,0

@@ -1,0 +1,2 @@
+../Core/Src/current.c:6:6:get_current_servos	5
+../Core/Src/current.c:42:7:get_current_all_servos	2

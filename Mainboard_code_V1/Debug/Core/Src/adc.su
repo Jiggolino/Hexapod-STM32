@@ -1,0 +1,9 @@
+../Core/Src/adc.c:13:6:ADC_Init	24	static
+../Core/Src/adc.c:24:10:ADC_ReadRaw	48	static
+../Core/Src/adc.c:43:10:ADC_ReadRawAvg	64	static
+../Core/Src/adc.c:56:10:ADC_ReadCurrentRight	8	static
+../Core/Src/adc.c:61:10:ADC_ReadCurrentLeft	8	static
+../Core/Src/adc.c:66:10:ADC_ReadBatteryRaw	8	static
+../Core/Src/adc.c:71:10:ADC_ReadVrefintRaw	8	static
+../Core/Src/adc.c:78:10:ADC_CalibrateVdda	16	static
+../Core/Src/adc.c:86:10:ADC_GetVddaMv	4	static

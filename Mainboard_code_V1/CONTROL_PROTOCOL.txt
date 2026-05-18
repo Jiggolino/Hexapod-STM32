@@ -1,0 +1,104 @@
+====================================================
+  HEXAPOD CONTROL PACKET PROTOCOL
+====================================================
+
+Packet format (sent over TCP port 5000, 50 times per second):
+
+  /CONTROLL/{rsx},{rsy},{lsx},{lsy},{hat_x},{hat_y},{face},{sticks},{trig},{back}\n
+
+All values are plain integers separated by commas.
+The packet always ends with a newline character \n.
+
+
+----------------------------------------------------
+  FIELD BREAKDOWN
+----------------------------------------------------
+
+[0] rsx      Right stick X        -100 to 100   (negative = left,  positive = right)
+[1] rsy      Right stick Y        -100 to 100   (negative = up,    positive = down)
+[2] lsx      Left stick X         -100 to 100   (negative = left,  positive = right)
+[3] lsy      Left stick Y         -100 to 100   (negative = up,    positive = down)
+[4] hat_x    D-pad X              -1, 0, 1      (-1 = left, 1 = right)
+[5] hat_y    D-pad Y              -1, 0, 1      (-1 = down, 1 = up)
+[6] face     Face buttons         bitmask (see below)
+[7] sticks   Stick clicks         bitmask (see below)
+[8] trig     Shoulder / triggers  bitmask (see below)
+[9] back     Back paddles         bitmask (see below)  -- reserved, always 0 for now
+
+
+----------------------------------------------------
+  BITMASK DETAILS
+----------------------------------------------------
+
+face  (field 6)
+  bit 0  (value 1)   X button
+  bit 1  (value 2)   A button
+  bit 2  (value 4)   B button
+  bit 3  (value 8)   Y button
+
+  example: face=6  means A + B are pressed  (2 + 4 = 6)
+
+sticks  (field 7)
+  bit 0  (value 1)   L3  (left stick click)
+  bit 1  (value 2)   R3  (right stick click)
+
+trig  (field 8)
+  bit 0  (value 1)   LT  (left trigger,  digital)
+  bit 1  (value 2)   Back / View button
+  bit 2  (value 4)   LB  (left bumper)
+  bit 3  (value 8)   RT  (right trigger, digital)
+  bit 4  (value 16)  RB  (right bumper)
+  bit 5  (value 32)  Start / Menu button
+
+  example: trig=12  means LB + RT are pressed  (4 + 8 = 12)
+
+back  (field 9)  -- currently unused, always 0
+  bit 0  (value 1)   M1
+  bit 1  (value 2)   M2
+  bit 2  (value 4)   M3
+  bit 3  (value 8)   Y1
+  bit 4  (value 16)  Y2
+  bit 5  (value 32)  Y3
+
+
+----------------------------------------------------
+  EXAMPLE PACKETS
+----------------------------------------------------
+
+Idle (nothing pressed):
+  /CONTROLL/0,0,0,0,0,0,0,0,0,0\n
+
+Moving forward (left stick up):
+  /CONTROLL/0,0,0,-80,0,0,0,0,0,0\n
+
+Turning right (right stick right):
+  /CONTROLL/75,0,0,0,0,0,0,0,0,0\n
+
+A button + LB pressed:
+  /CONTROLL/0,0,0,0,0,0,2,0,4,0\n
+
+D-pad up + right trigger:
+  /CONTROLL/0,0,0,0,0,1,0,0,8,0\n
+
+
+----------------------------------------------------
+  HOW TO READ A BITMASK IN YOUR RECEIVER
+----------------------------------------------------
+
+To check if a specific button is pressed, use a bitwise AND:
+
+  Python:   if trig & 4:   # LB is pressed
+  C:        if (trig & 4)  // LB is pressed
+  Arduino:  if (trig & 4)  // LB is pressed
+
+
+----------------------------------------------------
+  TEXT COMMAND CHANNEL (port 5001)
+----------------------------------------------------
+
+A separate TCP connection on port 5001 accepts plain UTF-8 text.
+These are freeform string commands (no fixed format).
+Each message is sent as a single TCP write, no newline required.
+
+
+====================================================

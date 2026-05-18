@@ -1,0 +1,9 @@
+../Core/Src/hexapod_kinematics.c:21:10:kinematics_forward	1
+../Core/Src/hexapod_kinematics.c:48:6:kinematics_forward_full	1
+../Core/Src/hexapod_kinematics.c:78:12:kinematics_inverse_analytical	3
+../Core/Src/hexapod_kinematics.c:129:12:kinematics_inverse	1
+../Core/Src/hexapod_kinematics.c:141:5:kinematics_is_reachable	3
+../Core/Src/hexapod_kinematics.c:149:7:kinematics_max_reach	1
+../Core/Src/hexapod_kinematics.c:153:7:kinematics_min_reach	2
+../Core/Src/hexapod_kinematics.c:165:6:kinematics_get_coxia_axes	2
+../Core/Src/hexapod_kinematics.c:171:5:kinematics_in_workspace	4

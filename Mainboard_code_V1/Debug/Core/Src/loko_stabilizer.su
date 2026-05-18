@@ -1,0 +1,5 @@
+../Core/Src/loko_stabilizer.c:40:13:pid_reset	16	static
+../Core/Src/loko_stabilizer.c:46:14:pid_tick	48	static
+../Core/Src/loko_stabilizer.c:65:21:clampf	24	static
+../Core/Src/loko_stabilizer.c:72:6:loko_stabilizer_init	16	static
+../Core/Src/loko_stabilizer.c:80:6:loko_stabilizer_update	56	static

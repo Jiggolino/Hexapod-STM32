@@ -1,0 +1,5 @@
+../Core/Src/loko_stabilizer.c:40:13:pid_reset	1
+../Core/Src/loko_stabilizer.c:46:14:pid_tick	4
+../Core/Src/loko_stabilizer.c:65:21:clampf	3
+../Core/Src/loko_stabilizer.c:72:6:loko_stabilizer_init	1
+../Core/Src/loko_stabilizer.c:80:6:loko_stabilizer_update	9

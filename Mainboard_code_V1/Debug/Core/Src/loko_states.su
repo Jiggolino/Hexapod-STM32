@@ -1,0 +1,14 @@
+../Core/Inc/loko_input.h:84:23:loko_pressed	16	static
+../Core/Inc/loko_input.h:90:23:loko_held	16	static
+../Core/Src/loko_states.c:49:6:loko_reset_4leg_mode	4	static
+../Core/Src/loko_states.c:65:13:state_un_armed	24	static
+../Core/Src/loko_states.c:71:13:state_stand	32	static
+../Core/Src/loko_states.c:84:13:state_walk	32	static
+../Core/Src/loko_states.c:126:13:state_walk_4_legs	32	static
+../Core/Src/loko_states.c:207:13:state_stand_4_legs	40	static
+../Core/Src/loko_states.c:281:13:state_rotate_in_place	32	static
+../Core/Src/loko_states.c:293:13:state_dancing	24	static
+../Core/Src/loko_states.c:314:13:loko_update_leds	16	static
+../Core/Src/loko_states.c:347:6:loko_dispatch	40	static
+../Core/Src/loko_states.c:376:6:loko_get_stabilizer_angles	16	static
+../Core/Src/loko_states.c:382:6:loko_get_stabilizer_shift	16	static

@@ -1,0 +1,10 @@
+../Core/Src/lokomotion.c:20:6:loko_init	32	static
+../Core/Src/lokomotion.c:40:6:loko_default_input	16	static
+../Core/Src/lokomotion.c:47:6:loko_update	24	static
+../Core/Src/lokomotion.c:53:6:loko_set_foot_local	32	static
+../Core/Src/lokomotion.c:62:6:loko_set_foot_body	32	static
+../Core/Src/lokomotion.c:71:6:loko_set_state	16	static
+../Core/Src/lokomotion.c:77:6:loko_enable	16	static
+../Core/Src/lokomotion.c:82:10:loko_get_errors	16	static
+../Core/Src/lokomotion.c:83:10:loko_clear_errors	16	static
+../Core/Src/lokomotion.c:85:6:loko_stabiliser_configure	24	static
