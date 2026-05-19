@@ -242,10 +242,23 @@ static struct {
 static uint32_t ws_last_tick = 0;
 static uint32_t ws_mode_start = 0;
 
+/* Blend: snapshot of pixel values at the moment of a mode switch.
+ * For WS_BLEND_MS after a transition, rendered output is crossfaded
+ * from this snapshot to the new mode using a sine ease-in curve. */
+#define WS_BLEND_MS  900
+static uint8_t ws_blend_from[WS2812_STRIP_COUNT][WS2812_LEDS_PER_STRIP][3];
+
+
 /* ---- mode setters ---- */
 
 static void ws_switch_mode(ws_mode_t m)
 {
+    /* Snapshot current pixel state so we can crossfade from it. */
+    for (int s = 0; s < WS2812_STRIP_COUNT; ++s)
+        for (int i = 0; i < WS2812_LEDS_PER_STRIP; ++i)
+            for (int c = 0; c < 3; ++c)
+                ws_blend_from[s][i][c] = ws_rgb[s][i][c];
+
     ws_mode = m;
     ws_mode_start = HAL_GetTick();
     ws_last_tick = 0;               /* force immediate redraw on next tick */
@@ -326,19 +339,29 @@ static void render_solid(void)
     }
 }
 
-/* Morph: brightness of a single hue eases smoothly between dim and full bright.
- * Slow, calm "breathing" — all LEDs move in phase. */
+/* Morph: hue drifts between the base color and a deeper adjacent shade
+ * (~35 deg further around the wheel toward the "dark" side), staying at
+ * full brightness so the shift reads as a color change, not dimming.
+ * 4 s cycle, sine-eased so it lingers at each end and glides through the middle. */
+#define WS_MORPH_HUE_SHIFT  12      /* degrees toward the adjacent dark shade */
+#define WS_MORPH_PERIOD_MS  4000UL
+
+static uint16_t hue_lerp(uint16_t a, uint16_t b, uint8_t mix);
+
 static void render_morph(uint32_t ms)
 {
-    /* 3 s full breath cycle: phase wraps every 3000 ms. */
-    uint16_t phase16 = (uint16_t)((ms * 65536UL / 3000UL) & 0xFFFF);
-    uint16_t s16 = sine16(phase16);          /* 0..65535, eased */
-    /* Map 0..65535 -> 20..255 so LEDs never fully turn off (dim floor). */
-    uint8_t v = (uint8_t)(20 + ((uint32_t)(255 - 20) * s16) / 65535);
+    uint16_t phase16 = (uint16_t)((ms * 65536UL / WS_MORPH_PERIOD_MS) & 0xFFFF);
+    uint16_t s16 = sine16(phase16);   /* 0..65535 */
+    /* mix 0..255: how far we've drifted toward the shifted hue. */
+    uint8_t mix = (uint8_t)((uint32_t)s16 * 255 / 65535);
+
+    uint16_t hue = hue_lerp(ws_param.hue,
+                            (uint16_t)((ws_param.hue + WS_MORPH_HUE_SHIFT) % 360),
+                            mix);
 
     for (int s = 0; s < WS2812_STRIP_COUNT; ++s) {
         for (int i = 0; i < WS2812_LEDS_PER_STRIP; ++i) {
-            ws2812_set_pixel_hsv((ws2812_strip_t)s, i, ws_param.hue, v);
+            ws2812_set_pixel_hsv((ws2812_strip_t)s, i, hue, 210);
         }
     }
 }
@@ -381,25 +404,36 @@ static void load_pos_to_sl(uint8_t pos, ws2812_strip_t *strip, uint8_t *led)
 
 static void render_loading(uint32_t ms)
 {
-    /* Clear both strips first; we only light up head + trail. */
-    ws2812_clear(WS2812_STRIP_0);
-    ws2812_clear(WS2812_STRIP_1);
+    /* Clear by writing directly so we can additive-blend below. */
+    for (int s = 0; s < WS2812_STRIP_COUNT; ++s)
+        for (int i = 0; i < WS2812_LEDS_PER_STRIP; ++i)
+            ws_rgb[s][i][0] = ws_rgb[s][i][1] = ws_rgb[s][i][2] = 0;
 
-    uint8_t head = (uint8_t)((ms / LOAD_STEP_MS) % LOAD_PATH_LEN);
+    uint32_t step = ms / LOAD_STEP_MS;
+    /* frac 0..255: how far between the current step and the next. */
+    uint8_t  frac = (uint8_t)((ms % LOAD_STEP_MS) * 255UL / LOAD_STEP_MS);
 
-    /* Paint 3 pixels: head (100 %), -1 (25 %), -2 (1 %). 1 % of 255 ~= 3. */
-    static const uint8_t trail_scale[3] = { 255, 64, 3 };
+    /* Head=255, trail-1=64, trail-2=8. */
+    static const uint8_t trail_scale[3] = { 255, 64, 8 };
 
     for (int k = 0; k < 3; ++k) {
-        /* walk backwards along the path with wraparound */
-        uint8_t pos = (uint8_t)((head + LOAD_PATH_LEN - k) % LOAD_PATH_LEN);
-        ws2812_strip_t strip;
-        uint8_t led;
-        load_pos_to_sl(pos, &strip, &led);
+        /* Outgoing position (fading out as frac rises). */
+        uint8_t pos_a = (uint8_t)((step + LOAD_PATH_LEN - k) % LOAD_PATH_LEN);
+        /* Incoming position (fading in). */
+        uint8_t pos_b = (uint8_t)((step + 1 + LOAD_PATH_LEN - k) % LOAD_PATH_LEN);
 
-        /* Blue comet; trail_scale sets brightness per position. */
-        uint8_t b = trail_scale[k];
-        ws2812_set_pixel(strip, led, 0, 0, b);
+        uint8_t ba = (uint8_t)((uint16_t)trail_scale[k] * (255 - frac) / 255);
+        uint8_t bb = (uint8_t)((uint16_t)trail_scale[k] * frac         / 255);
+
+        ws2812_strip_t sa, sb; uint8_t la, lb;
+        load_pos_to_sl(pos_a, &sa, &la);
+        load_pos_to_sl(pos_b, &sb, &lb);
+
+        /* Additive blend with saturation — keeps overlapping trail pixels bright. */
+        uint8_t *pa = &ws_rgb[sa][la][2];
+        *pa = (uint8_t)((*pa > 255 - ba) ? 255 : *pa + ba);
+        uint8_t *pb = &ws_rgb[sb][lb][2];
+        *pb = (uint8_t)((*pb > 255 - bb) ? 255 : *pb + bb);
     }
 }
 
@@ -460,11 +494,31 @@ void ws2812_tick(void)
             ws2812_clear(WS2812_STRIP_0);
             ws2812_clear(WS2812_STRIP_1);
             break;
-        case MODE_SOLID:   render_solid();             break;
-        case MODE_MORPH:   render_morph(ms_in_mode);   break;
-        case MODE_PULSE:   render_pulse(ms_in_mode);   break;
+        case MODE_SOLID:     render_solid();               break;
+        case MODE_MORPH:     render_morph(ms_in_mode);     break;
+        case MODE_PULSE:     render_pulse(ms_in_mode);     break;
         case MODE_LOADING:   render_loading(ms_in_mode);   break;
         case MODE_HUE_CYCLE: render_hue_cycle(ms_in_mode); break;
+    }
+
+    /* Crossfade: for the first WS_BLEND_MS after any mode switch, linearly
+     * interpolate (sine-eased) from the pre-switch snapshot to the new output.
+     * This runs in-place on ws_rgb before DMA so no extra buffer is needed. */
+    if (ms_in_mode < WS_BLEND_MS) {
+        /* Quarter-sine easing: starts slow, accelerates into the new mode. */
+        uint16_t phase16 = (uint16_t)((ms_in_mode * 16384UL) / WS_BLEND_MS); /* 0..16383 */
+        uint16_t s16 = sine16(phase16);                    /* 32768..65535 over 0..pi/2 */
+        uint8_t  t   = (uint8_t)(((s16 - 32768U) * 255U) / 32767U); /* 0..255 */
+
+        for (int s = 0; s < WS2812_STRIP_COUNT; ++s) {
+            for (int i = 0; i < WS2812_LEDS_PER_STRIP; ++i) {
+                for (int c = 0; c < 3; ++c) {
+                    int32_t from = ws_blend_from[s][i][c];
+                    int32_t to   = ws_rgb[s][i][c];
+                    ws_rgb[s][i][c] = (uint8_t)(from + (to - from) * t / 255);
+                }
+            }
+        }
     }
 
     /* Push both frames. If the previous DMA hasn't finished yet (we got called

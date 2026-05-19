@@ -96,10 +96,9 @@ void loko_build_default_legs(LokoState *st)
         L->femur_scale          = side_dir * FEMUR_DIR * RAD2DEG;
         L->tibia_scale          = side_dir * TIBIA_DIR * RAD2DEG;
         
-        /* Base offsets are 90/90/0. Calibration is now handled in pca9685.c */
-        L->coxa_offset_deg      = 90.0f;
-        L->femur_offset_deg     = 90.0f;
-        L->tibia_offset_deg     = (i < 3) ? 0.0f : 180.0f;  /* left side offset for inverted scale */
+        L->coxa_offset_deg  = SERVO_BASE_COXA_DEG;
+        L->femur_offset_deg = SERVO_BASE_FEMUR_DEG;
+        L->tibia_offset_deg = (i < 3) ? SERVO_BASE_TIBIA_RIGHT_DEG : SERVO_BASE_TIBIA_LEFT_DEG;
 
         L->active = 1;
     }

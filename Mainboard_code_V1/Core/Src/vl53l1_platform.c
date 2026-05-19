@@ -11,6 +11,14 @@
 /* Shared I2C handle — set by TOF_Init() before any VL53L1X call */
 I2C_HandleTypeDef *vl53l1x_hi2c = NULL;
 
+static void tof_i2c_recover(void)
+{
+    if (!vl53l1x_hi2c) return;
+    vl53l1x_hi2c->State     = HAL_I2C_STATE_READY;
+    vl53l1x_hi2c->ErrorCode = HAL_I2C_ERROR_NONE;
+    vl53l1x_hi2c->Instance->ICR = I2C_ICR_NACKCF | I2C_ICR_STOPCF | I2C_ICR_BERRCF | I2C_ICR_ARLOCF;
+}
+
 /* ── Helper: write N bytes to a 16-bit register address ────────────────── */
 /* Maximum single write: 135 bytes (SensorInit default config) + 2 addr bytes */
 #define WR_BUF_MAX 140
@@ -25,9 +33,14 @@ static int8_t wr_bytes(uint16_t dev, uint16_t reg,
     buf[1] = (uint8_t)(reg & 0xFF);
     for (uint16_t i = 0; i < len; i++) buf[2 + i] = data[i];
 
-    HAL_StatusTypeDef s =
-        HAL_I2C_Master_Transmit(vl53l1x_hi2c, (uint16_t)dev,
-                                buf, (uint16_t)(len + 2u), 20);
+    HAL_StatusTypeDef s = HAL_ERROR;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        s = HAL_I2C_Master_Transmit(vl53l1x_hi2c, (uint16_t)dev,
+                                    buf, (uint16_t)(len + 2u), 20);
+        if (s == HAL_OK) break;
+        tof_i2c_recover();
+        HAL_Delay(5);
+    }
     return (s == HAL_OK) ? 0 : -1;
 }
 
@@ -37,13 +50,23 @@ static int8_t rd_bytes(uint16_t dev, uint16_t reg,
 {
     uint8_t addr[2] = { (uint8_t)(reg >> 8), (uint8_t)(reg & 0xFF) };
 
-    HAL_StatusTypeDef s =
-        HAL_I2C_Master_Transmit(vl53l1x_hi2c, (uint16_t)dev,
-                                addr, 2, 20);
+    HAL_StatusTypeDef s = HAL_ERROR;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        s = HAL_I2C_Master_Transmit(vl53l1x_hi2c, (uint16_t)dev,
+                                    addr, 2, 20);
+        if (s == HAL_OK) break;
+        tof_i2c_recover();
+        HAL_Delay(5);
+    }
     if (s != HAL_OK) return -1;
 
-    s = HAL_I2C_Master_Receive(vl53l1x_hi2c, (uint16_t)dev,
-                               data, len, 20);
+    for (int attempt = 0; attempt < 3; attempt++) {
+        s = HAL_I2C_Master_Receive(vl53l1x_hi2c, (uint16_t)dev,
+                                   data, len, 20);
+        if (s == HAL_OK) break;
+        tof_i2c_recover();
+        HAL_Delay(5);
+    }
     return (s == HAL_OK) ? 0 : -1;
 }
 

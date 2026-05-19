@@ -19,6 +19,7 @@ static inline float clampf(float x, float lo, float hi)
     return x < lo ? lo : x > hi ? hi : x;
 }
 
+
 void loko_solve_and_write(LokoState *st)
 {
     if (!st->enabled) return;
@@ -51,7 +52,8 @@ void loko_solve_and_write(LokoState *st)
 
         /* STAB_STABLE: shift body XY — equivalent to moving all feet in the
          * opposite direction relative to the body frame.
-         * Positive shift_x moves body forward → feet shift backward (-x). */
+         * Positive shift_x moves body forward → feet shift backward (-x).
+         * Positive shift_y moves body left   → feet shift right   (-y). */
         leg_point.x -= shift_x;
         leg_point.y -= shift_y;
 
@@ -80,32 +82,36 @@ void loko_solve_and_write(LokoState *st)
         else if (r == IK_UNREACHABLE) status[i] = 'R';
         else                         status[i] = 'L';
 
-        /* Convert to servo degrees and clamp to [0, 180] */
-        coxa_deg[i]  = clampf(L->coxa_scale  * L->theta1 + L->coxa_offset_deg,  0.0f, 180.0f);
-        femur_deg[i] = clampf(L->femur_scale * L->theta2 + L->femur_offset_deg, 0.0f, 180.0f);
-        tibia_deg[i] = clampf(L->tibia_scale * L->theta3 + L->tibia_offset_deg, 0.0f, 180.0f);
+        /* Convert to servo degrees and clamp to physical travel */
+        coxa_deg[i]  = clampf(L->coxa_scale  * L->theta1 + L->coxa_offset_deg,  SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);
+        femur_deg[i] = clampf(L->femur_scale * L->theta2 + L->femur_offset_deg, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);
+        tibia_deg[i] = clampf(L->tibia_scale * L->theta3 + L->tibia_offset_deg, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);
     }
 
     /* Front leg horizontal rotation in 4-leg modes */
     if (st->state == LOKO_STAND_4_LEGS || st->state == LOKO_WALK_4_LEGS) {
-        coxa_deg[0] = clampf(coxa_deg[0] + 45.0f, 0.0f, 180.0f);  /* FR: +45° */
-        coxa_deg[5] = clampf(coxa_deg[5] - 45.0f, 0.0f, 180.0f);  /* FL: -45° */
+        coxa_deg[0] = clampf(coxa_deg[0] + LOKO_COXA_4LEG_OFFSET_DEG, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);  /* FR */
+        coxa_deg[5] = clampf(coxa_deg[5] - LOKO_COXA_4LEG_OFFSET_DEG, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);  /* FL */
     }
 
-    /* Build and send the debug line */
-    static const char * const LEG_NAME[LOKO_NUM_LEGS] = {"FR", "MR", "BR", "BL", "ML", "FL"};
-    char line[256];
-    int pos = 0;
-    pos += snprintf(line + pos, sizeof(line) - pos, "SERVO");
-    for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
-        pos += snprintf(line + pos, sizeof(line) - pos,
-                        " %s%c[C:%3d F:%3d T:%3d]",
-                        LEG_NAME[i], status[i],
-                        (int)coxa_deg[i], (int)femur_deg[i], (int)tibia_deg[i]);
-        if (pos >= (int)sizeof(line)) break;
+    /* Build and send the debug line (throttled by LOKO_SERVO_PRINT_EVERY) */
+    static uint32_t s_print_count = 0;
+    if (++s_print_count >= LOKO_SERVO_PRINT_EVERY) {
+        s_print_count = 0;
+        static const char * const LEG_NAME[LOKO_NUM_LEGS] = {"FR", "MR", "BR", "BL", "ML", "FL"};
+        char line[256];
+        int pos = 0;
+        pos += snprintf(line + pos, sizeof(line) - pos, "SERVO");
+        for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
+            pos += snprintf(line + pos, sizeof(line) - pos,
+                            " %s%c[C:%3d F:%3d T:%3d]",
+                            LEG_NAME[i], status[i],
+                            (int)coxa_deg[i], (int)femur_deg[i], (int)tibia_deg[i]);
+            if (pos >= (int)sizeof(line)) break;
+        }
+        pos += snprintf(line + pos, sizeof(line) - pos, "\r\n");
+        printf("%s", line);   // now goes through DMA ring buffer
     }
-    pos += snprintf(line + pos, sizeof(line) - pos, "\r\n");
-    printf("%s", line);   // now goes through DMA ring buffer
 
     /* Drive the servos */
     for (int i = 0; i < LOKO_NUM_LEGS; ++i) {

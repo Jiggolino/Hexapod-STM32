@@ -133,10 +133,12 @@ static void I2C_BusClear(void)
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    /* Three rounds of 9 SCL pulses + STOP.  Each round clocks one byte out of
+    /* 18 rounds of 9 SCL pulses + STOP.  Each round clocks one byte out of
      * the slave, bringing it to a byte boundary where the STOP is recognised.
+     * 18 rounds covers slaves stuck up to 18 bytes deep in a transaction
+     * (PCA9685 burst writes, VL53L1X 135-byte config writes, IMU multi-byte reads).
      * Do NOT break early on SDA high — the slave can have SDA=1 mid-byte. */
-    for (int round = 0; round < 3; round++) {
+    for (int round = 0; round < 18; round++) {
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
         HAL_Delay(1);
 

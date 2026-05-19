@@ -3,19 +3,20 @@
  * @brief IMU-based stabiliser — STABLE (COM shift) and LEVEL (platform tilt)
  *
  * STAB_STABLE
- *   Translates the body horizontally so gravity's projection stays centred
- *   over the support polygon.  When tilted by θ the ideal shift is
- *   body_height·tan(θ) ≈ body_height·θ — that is the Kp baseline.
- *   Output: shift_x_mm, shift_y_mm (mm).  roll/pitch outputs = 0.
+ *   Shifts the body horizontally so the projected COM stays over the support
+ *   polygon when the robot is tilted.  Ideal shift = body_height * tan(θ).
+ *
+ *   Sign conventions (physical, verified against hardware):
+ *     pitch_rad > 0  →  nose UP    →  shift body FORWARD  (+shift_x)
+ *     roll_rad  > 0  →  right DOWN →  shift body RIGHT    (-shift_y; IMU roll axis inverted vs. convention)
+ *
+ *   In loko_servo.c the shift is applied as:
+ *     leg_point.x -= shift_x;   (feet move back  → body moves forward)
+ *     leg_point.y -= shift_y;   (feet move right → body moves left)
  *
  * STAB_LEVEL
  *   Tilts the body equal-and-opposite to the measured slope so the top
- *   platform stays level.
- *   Output: roll_rad, pitch_rad (rad).  shift outputs = 0.
- *
- * Both modes run independent PID state to avoid integral pollution on
- * mode switches.  D-term derivative is taken on the low-pass filtered
- * error to reject high-frequency IMU noise.
+ *   platform stays level.  Uses P+I control with a first-order input LPF.
  *
  * Gains are in loko_config.h.
  */
@@ -26,6 +27,7 @@
 
 #define DEG2RAD  (3.14159f / 180.0f)
 
+/* ── PID state (LEVEL mode) ─────────────────────────────────────────────────── */
 typedef struct {
     float integral;
     float prev_lpf;
@@ -34,22 +36,22 @@ typedef struct {
 
 static PIDState s_level_roll  = {0};
 static PIDState s_level_pitch = {0};
-static PIDState s_stable_roll  = {0};
-static PIDState s_stable_pitch = {0};
+
+/* ── STABLE mode output LPF state ───────────────────────────────────────────── */
+static float s_stable_lpf_x = 0.0f;
+static float s_stable_lpf_y = 0.0f;
 
 static void pid_reset(PIDState *s)
 {
     s->integral = s->prev_lpf = s->lpf = 0.0f;
 }
 
-/* Returns P+I+D output.  i_clamp limits integral windup. */
 static float pid_tick(PIDState *s,
                       float err,
                       float kp, float ki, float kd,
                       float i_clamp,
                       float dt)
 {
-    /* Low-pass filter on error — D acts on smoothed signal only */
     s->lpf = STAB_LPF_ALPHA * err + (1.0f - STAB_LPF_ALPHA) * s->lpf;
 
     float derivative = (dt > 0.0f) ? (s->lpf - s->prev_lpf) / dt : 0.0f;
@@ -71,9 +73,9 @@ static inline float clampf(float v, float lo, float hi)
 
 void loko_stabilizer_init(LokoStabilizerConfig *cfg)
 {
-    cfg->max_roll_rad      = 10.0f * DEG2RAD;
-    cfg->max_pitch_rad     = 10.0f * DEG2RAD;
-    cfg->max_body_shift_mm = 50.0f;
+    cfg->max_roll_rad      = STAB_MAX_TILT_DEG * DEG2RAD;
+    cfg->max_pitch_rad     = STAB_MAX_TILT_DEG * DEG2RAD;
+    cfg->max_body_shift_mm = STAB_MAX_BODY_SHIFT_MM;
     cfg->wave_disable      = 1;
 }
 
@@ -93,58 +95,81 @@ void loko_stabilizer_update(const LokoStabilizerConfig *cfg,
     *out_shift_y_mm = 0.0f;
 
     if (stab_mode == STAB_OFF) {
-        pid_reset(&s_level_roll);  pid_reset(&s_level_pitch);
-        pid_reset(&s_stable_roll); pid_reset(&s_stable_pitch);
+        pid_reset(&s_level_roll);
+        pid_reset(&s_level_pitch);
+        s_stable_lpf_x = s_stable_lpf_y = 0.0f;
         return;
     }
 
     if (cfg->wave_disable && gait_mode == GAIT_WAVE) {
-        pid_reset(&s_level_roll);  pid_reset(&s_level_pitch);
-        pid_reset(&s_stable_roll); pid_reset(&s_stable_pitch);
+        pid_reset(&s_level_roll);
+        pid_reset(&s_level_pitch);
+        s_stable_lpf_x = s_stable_lpf_y = 0.0f;
         return;
     }
 
-    float roll_deg, pitch_deg;
-    IMU_GetAngles(&roll_deg, &pitch_deg);
+    /* Raw accelerometer → tilt angles.
+     * Convention (inverted relative to IMU_GetAngles, verified on hardware):
+     *   pitch_rad > 0  when nose UP
+     *   roll_rad  > 0  when right side DOWN                                  */
+    float ax_g = imu_data->accel_x_mg / 1000.0f;
+    float ay_g = imu_data->accel_y_mg / 1000.0f;
+    float az_g = imu_data->accel_z_mg / 1000.0f;
 
-    float roll_rad  = clampf(roll_deg  * DEG2RAD, -cfg->max_roll_rad,  cfg->max_roll_rad);
-    float pitch_rad = clampf(pitch_deg * DEG2RAD, -cfg->max_pitch_rad, cfg->max_pitch_rad);
+    float roll_rad  = clampf((atan2f(ax_g, az_g) - IMU_ROLL_BIAS_DEG  * DEG2RAD),
+                             -cfg->max_roll_rad,  cfg->max_roll_rad);
+    float pitch_rad = clampf((atan2f(ay_g, az_g) - IMU_PITCH_BIAS_DEG * DEG2RAD),
+                             -cfg->max_pitch_rad, cfg->max_pitch_rad);
 
-    /* Deadzone: zero the error (and drain integral) while inside the band.
-     * This stops IMU noise from driving the servos at rest. */
-    if (roll_rad  >  STAB_DEADZONE_RAD) roll_rad  -= STAB_DEADZONE_RAD;
-    else if (roll_rad  < -STAB_DEADZONE_RAD) roll_rad  += STAB_DEADZONE_RAD;
-    else { roll_rad  = 0.0f; pid_reset(&s_level_roll);  pid_reset(&s_stable_roll); }
-
-    if (pitch_rad >  STAB_DEADZONE_RAD) pitch_rad -= STAB_DEADZONE_RAD;
+    /* Deadzone: suppress correction within the noise band. */
+    if      (pitch_rad >  STAB_DEADZONE_RAD) pitch_rad -= STAB_DEADZONE_RAD;
     else if (pitch_rad < -STAB_DEADZONE_RAD) pitch_rad += STAB_DEADZONE_RAD;
-    else { pitch_rad = 0.0f; pid_reset(&s_level_pitch); pid_reset(&s_stable_pitch); }
+    else    pitch_rad = 0.0f;
+
+    if      (roll_rad >  STAB_DEADZONE_RAD) roll_rad -= STAB_DEADZONE_RAD;
+    else if (roll_rad < -STAB_DEADZONE_RAD) roll_rad += STAB_DEADZONE_RAD;
+    else    roll_rad = 0.0f;
+
+    /* Stale-sample guard: don't advance integrals on repeated IMU data. */
+    static float prev_ax = 0.0f, prev_ay = 0.0f;
+    int fresh = (imu_data->accel_x_mg != prev_ax || imu_data->accel_y_mg != prev_ay);
+    prev_ax = imu_data->accel_x_mg;
+    prev_ay = imu_data->accel_y_mg;
+    float pid_dt = fresh ? dt : 0.0f;
 
     if (stab_mode == STAB_LEVEL) {
-        /* ── LEVEL: negate tilt so platform surface stays horizontal ────── */
-        pid_reset(&s_stable_roll);
-        pid_reset(&s_stable_pitch);
+        /* ── LEVEL: rotate body opposite to tilt so platform stays level ── */
+        s_stable_lpf_x = s_stable_lpf_y = 0.0f;
 
-        float r = pid_tick(&s_level_roll,  roll_rad,  STAB_LEVEL_KP, STAB_LEVEL_KI, STAB_LEVEL_KD, STAB_LEVEL_I_CLAMP_RAD, dt);
-        float p = pid_tick(&s_level_pitch, pitch_rad, STAB_LEVEL_KP, STAB_LEVEL_KI, STAB_LEVEL_KD, STAB_LEVEL_I_CLAMP_RAD, dt);
+        float r = pid_tick(&s_level_roll,  roll_rad,  STAB_LEVEL_KP, STAB_LEVEL_KI, STAB_LEVEL_KD, STAB_LEVEL_I_CLAMP_RAD, pid_dt);
+        float p = pid_tick(&s_level_pitch, pitch_rad, STAB_LEVEL_KP, STAB_LEVEL_KI, STAB_LEVEL_KD, STAB_LEVEL_I_CLAMP_RAD, pid_dt);
 
-        /* Correction is opposite to measured tilt */
         *out_roll  = clampf(-r, -cfg->max_roll_rad,  cfg->max_roll_rad);
         *out_pitch = clampf(-p, -cfg->max_pitch_rad, cfg->max_pitch_rad);
 
     } else { /* STAB_STABLE */
-        /* ── STABLE: shift body so COM projects over polygon centre ─────── */
-        /* IMU convention (imu.c:197):
-         *   +pitch = nose UP   → COM shifts backward → body shifts forward (+X)
-         *   +roll  = left DOWN → COM shifts left     → body shifts right   (-Y)
-         * Negate roll input so the PID drives body in the correct direction. */
+        /* ── STABLE: shift body so COM stays projected over support polygon ─
+         *
+         * When tilted by angle θ, the COM projects off-centre by body_height·tan(θ).
+         * Shifting the body by that same amount brings the projection back.
+         *
+         *   pitch > 0 (nose UP)    → target_x = +GAIN·tan(pitch) → body FORWARD
+         *   roll  > 0 (right DOWN) → target_y = +GAIN·tan(roll)  → body LEFT
+         *     (shifting toward the HIGH side moves COM back over polygon centre)
+         *
+         * A low-pass filter (STAB_STABLE_LPF) smooths the output so that
+         * entering/leaving the deadzone doesn't snap the servos.
+         */
         pid_reset(&s_level_roll);
         pid_reset(&s_level_pitch);
 
-        float sx = pid_tick(&s_stable_pitch,  pitch_rad, STAB_STABLE_KP, STAB_STABLE_KI, STAB_STABLE_KD, STAB_STABLE_I_CLAMP_MM, dt);
-        float sy = pid_tick(&s_stable_roll,  -roll_rad,  STAB_STABLE_KP, STAB_STABLE_KI, STAB_STABLE_KD, STAB_STABLE_I_CLAMP_MM, dt);
+        float target_x = STAB_STABLE_GAIN * tanf(pitch_rad);
+        float target_y = -STAB_STABLE_GAIN * tanf(roll_rad);
 
-        *out_shift_x_mm = clampf(sx, -cfg->max_body_shift_mm, cfg->max_body_shift_mm);
-        *out_shift_y_mm = clampf(sy, -cfg->max_body_shift_mm, cfg->max_body_shift_mm);
+        s_stable_lpf_x = STAB_STABLE_LPF * target_x + (1.0f - STAB_STABLE_LPF) * s_stable_lpf_x;
+        s_stable_lpf_y = STAB_STABLE_LPF * target_y + (1.0f - STAB_STABLE_LPF) * s_stable_lpf_y;
+
+        *out_shift_x_mm = clampf(s_stable_lpf_x, -cfg->max_body_shift_mm, cfg->max_body_shift_mm);
+        *out_shift_y_mm = clampf(s_stable_lpf_y, -cfg->max_body_shift_mm, cfg->max_body_shift_mm);
     }
 }

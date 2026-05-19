@@ -41,20 +41,11 @@
 #define FEMUR_DIR  1.0f
 #define TIBIA_DIR -1.0f
 
-/* ── IMU mounting offset (mm) ───────────────────────────────────────────── */
-/* Forward distance of the accelerometer from the body centre.
- * Used by the stabiliser to subtract centripetal acceleration caused by yaw. */
-#define IMU_OFFSET_X_MM  53.7f
-
 /* ── IMU angle bias (degrees) ───────────────────────────────────────────── */
 /* Measured angles when robot stands on flat ground. Subtracted inside
  * IMU_GetAngles() so callers see 0° at physical level. */
 #define IMU_ROLL_BIAS_DEG   (-0.47f)
 #define IMU_PITCH_BIAS_DEG  ( 0.87f)
-
-/* ── Sit pose height (mm) ───────────────────────────────────────────────── */
-/* foot_z when sitting: 60 mm below coxa pivot → belly clearance ≈ 20 mm.  */
-#define SIT_Z_MM  -60.0f
 
 /* ── Default trajectory shape (GeoGebra parameters) ────────────────────── */
 /* These drive hexleg_init() in loko_build_default_legs().
@@ -94,14 +85,12 @@
 #define STAB_DEADZONE_RAD  (0.2f * 3.14159f / 180.0f)
 
 /* STABLE mode — COM body shift; output units: mm
- * Ideal Kp = body_height (140 mm/rad) — shifts COM exactly over polygon at
- * steady state.  No D: the deadzone-reset creates artificial step inputs that
- * the D-term amplifies into violent overshoots (effective D gain = Kd*alpha/dt).
- * No I: horizontal body shift cannot close the IMU tilt loop.                */
-#define STAB_STABLE_KP   80.0f
-#define STAB_STABLE_KI    0.0f
-#define STAB_STABLE_KD    0.0f
-#define STAB_STABLE_I_CLAMP_MM   0.0f
+ * Ideal shift = body_height * tan(tilt_angle).
+ * STAB_STABLE_GAIN is the body height in mm (~140 mm).  The stabiliser
+ * computes gain * tanf(angle) directly for accuracy at all angles.
+ * Output is low-pass filtered to avoid jerky servo motion.                   */
+#define STAB_STABLE_GAIN  100.0f   /* mm — conservative; raise only if correction feels too small */
+#define STAB_STABLE_LPF   0.10f   /* output LPF alpha; 0.10 → ~100 ms at 100Hz — slow enough to break accel feedback */
 
 /* LEVEL mode — body tilt correction; output units: rad
  * Pure P+I only.  D removed: at 100 Hz with alpha=0.3, each deadzone exit
@@ -113,9 +102,8 @@
 #define STAB_LEVEL_KD  0.0f
 #define STAB_LEVEL_I_CLAMP_RAD  (3.0f * 3.14159f / 180.0f)  /* 3° clamp   */
 
-/* Input low-pass alpha (0..1).
- * 0.30 → time constant ≈ 33 ms at 100 Hz.  Safe to raise now that Kd=0
- * (D-term no longer amplifies the filter's step response).                   */
+/* Input low-pass alpha for LEVEL mode (0..1).
+ * 0.30 → time constant ≈ 33 ms at 100 Hz.                                   */
 #define STAB_LPF_ALPHA 0.3f
 
 /* ── Gait duty factors ───────────────────────────────────────────────────── */
@@ -124,7 +112,7 @@
  *
  *  TRIPOD  β = 0.50  — 3 of 6 legs airborne at once (classic tripod)
  *  WAVE    β = 0.833 — 1 of 6 legs airborne at once (wave gait, max stability)
- *  4LEG    β = 0.75  — 1 of 4 active legs airborne at once
+ *  4LEG    β = 0.75  — 1 of 4 active legs airborne at 1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
  *
  * These values feed loko_apply_gait_timing() which converts them into
  * per-segment time weights so hexleg_point_at() stretches stance and
@@ -138,5 +126,63 @@
 /* Print one servo-angle line every N calls to loko_solve_and_write.
  * At 100 Hz (10 ms loop) LOKO_SERVO_PRINT_EVERY = 10 → one line per 100 ms. */
 #define LOKO_SERVO_PRINT_EVERY  1
+
+/* ── Servo output angle limits (degrees) ────────────────────────────────── */
+/* Physical travel of all servos driven through the PCA9685 boards. */
+#define SERVO_ANGLE_MIN_DEG   0.0f
+#define SERVO_ANGLE_MAX_DEG 180.0f
+
+/* ── 4-leg mode coxa rotation offset (degrees) ──────────────────────────── */
+/* In STAND_4_LEGS / WALK_4_LEGS the two front legs are rotated outward by
+ * this offset so they clear the body at the wider 4-leg stance. */
+#define LOKO_COXA_4LEG_OFFSET_DEG  45.0f
+
+/* ── Stabiliser input clamp limits ─────────────────────────────────────── */
+/* IMU tilt readings are clamped to ±STAB_MAX_TILT_DEG before entering the
+ * PID so a single sensor spike cannot produce a violent body motion. */
+#define STAB_MAX_TILT_DEG       30.0f
+/* Body COM shift is clamped to ±STAB_MAX_BODY_SHIFT_MM (STAB_STABLE mode). */
+#define STAB_MAX_BODY_SHIFT_MM  60.0f
+
+/* ── Servo base offsets (degrees) ───────────────────────────────────────── */
+/* Mechanical zero for each joint type.  Added to the IK angle before
+ * sending to the servo so that 0° IK → neutral servo position.
+ * The tibia on the left side gets the inverted-scale offset (180°) because
+ * the servo is mirrored and the scale is already negated. */
+#define SERVO_BASE_COXA_DEG         90.0f
+#define SERVO_BASE_FEMUR_DEG        90.0f
+#define SERVO_BASE_TIBIA_RIGHT_DEG   0.0f
+#define SERVO_BASE_TIBIA_LEFT_DEG  180.0f
+
+/* ── Per-joint hardware calibration trims (degrees) ────────────────────── */
+/* Physical servo trim measured per leg/joint on the assembled robot.
+ * Positive = nudge the servo clockwise; negative = counter-clockwise.
+ * Adjust these when a joint sits off-neutral after running loko_init(). */
+
+/* RIGHT board — FR(ch 0-2), MR(ch 3-5), BR(ch 6-8) */
+#define SERVO_TRIM_FR_COXA_DEG      0.0f
+#define SERVO_TRIM_FR_FEMUR_DEG     4.4f
+#define SERVO_TRIM_FR_TIBIA_DEG    40.6f
+
+#define SERVO_TRIM_MR_COXA_DEG      0.0f
+#define SERVO_TRIM_MR_FEMUR_DEG     3.4f
+#define SERVO_TRIM_MR_TIBIA_DEG    38.6f
+
+#define SERVO_TRIM_BR_COXA_DEG      0.0f
+#define SERVO_TRIM_BR_FEMUR_DEG     0.0f
+#define SERVO_TRIM_BR_TIBIA_DEG     0.0f
+
+/* LEFT board — FL(ch 0-2), ML(ch 3-5), BL(ch 6-8) */
+#define SERVO_TRIM_FL_COXA_DEG      0.0f
+#define SERVO_TRIM_FL_FEMUR_DEG    -8.8f
+#define SERVO_TRIM_FL_TIBIA_DEG   -35.7f
+
+#define SERVO_TRIM_ML_COXA_DEG      0.0f
+#define SERVO_TRIM_ML_FEMUR_DEG    -5.9f
+#define SERVO_TRIM_ML_TIBIA_DEG   -40.1f
+
+#define SERVO_TRIM_BL_COXA_DEG      0.0f
+#define SERVO_TRIM_BL_FEMUR_DEG    -2.4f
+#define SERVO_TRIM_BL_TIBIA_DEG   -38.2f
 
 #endif /* LOKO_CONFIG_H */

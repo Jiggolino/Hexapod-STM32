@@ -13,6 +13,13 @@
 #include <stdio.h>
 #include <string.h>
 
+static void imu_i2c_recover(I2C_HandleTypeDef *hi2c)
+{
+    hi2c->State     = HAL_I2C_STATE_READY;
+    hi2c->ErrorCode = HAL_I2C_ERROR_NONE;
+    hi2c->Instance->ICR = I2C_ICR_NACKCF | I2C_ICR_STOPCF | I2C_ICR_BERRCF | I2C_ICR_ARLOCF;
+}
+
 /* HAL expects 8-bit address (7-bit << 1).  SA0 low → 0x6A → 0xD4 */
 #define IMU_I2C_ADDR_8BIT  (LSM6DSO16IS_I2C_ADDR << 1)   /* 0x6A << 1 = 0xD4 */
 
@@ -28,6 +35,7 @@ static int32_t platform_write(void *handle, uint8_t reg, const uint8_t *buf, uin
     for (int attempt = 0; attempt < 3; attempt++) {
         s = HAL_I2C_Master_Transmit(hi2c, IMU_I2C_ADDR_8BIT, msg, len + 1, 20);
         if (s == HAL_OK) break;
+        imu_i2c_recover(hi2c);
         HAL_Delay(5);
     }
     return (s == HAL_OK) ? 0 : -1;
@@ -41,6 +49,7 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *buf, uint16_t l
     for (int attempt = 0; attempt < 3; attempt++) {
         s = HAL_I2C_Master_Transmit(hi2c, IMU_I2C_ADDR_8BIT, &reg, 1, 20);
         if (s == HAL_OK) break;
+        imu_i2c_recover(hi2c);
         HAL_Delay(5);
     }
     if (s != HAL_OK) return -1;
@@ -48,6 +57,7 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *buf, uint16_t l
     for (int attempt = 0; attempt < 3; attempt++) {
         s = HAL_I2C_Master_Receive(hi2c, IMU_I2C_ADDR_8BIT, buf, len, 20);
         if (s == HAL_OK) break;
+        imu_i2c_recover(hi2c);
         HAL_Delay(5);
     }
     return (s == HAL_OK) ? 0 : -1;
@@ -196,7 +206,7 @@ void IMU_GetAngles(float *out_roll_deg, float *out_pitch_deg)
     /* Subtract mounting bias, then negate so conventions match robot frame:
      * roll: right side lower → negative   pitch: nose lower → negative */
     if (out_roll_deg)  *out_roll_deg  = -(atan2f(ax, az) * (180.0f / 3.14159f) - IMU_ROLL_BIAS_DEG);
-    if (out_pitch_deg) *out_pitch_deg =  (atan2f(ay, az) * (180.0f / 3.14159f) - IMU_PITCH_BIAS_DEG);
+    if (out_pitch_deg) *out_pitch_deg = -(atan2f(ay, az) * (180.0f / 3.14159f) - IMU_PITCH_BIAS_DEG);
 }
 
 void IMU_Print(const IMU_Data_t *data)

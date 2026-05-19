@@ -1,8 +1,9 @@
-../Core/Src/imu.c:19:16:platform_write	312	static
-../Core/Src/imu.c:36:16:platform_read	48	static
-../Core/Src/imu.c:67:13:lpf1_reset	16	static
-../Core/Src/imu.c:73:13:lpf1_update3	40	static
-../Core/Src/imu.c:84:9:IMU_Init	32	static
-../Core/Src/imu.c:155:9:IMU_Read	64	static
-../Core/Src/imu.c:189:6:IMU_GetAngles	56	static
-../Core/Src/imu.c:202:6:IMU_Print	56	static
+../Core/Src/imu.c:16:13:imu_i2c_recover	16	static
+../Core/Src/imu.c:26:16:platform_write	312	static
+../Core/Src/imu.c:44:16:platform_read	48	static
+../Core/Src/imu.c:77:13:lpf1_reset	16	static
+../Core/Src/imu.c:83:13:lpf1_update3	40	static
+../Core/Src/imu.c:94:9:IMU_Init	32	static
+../Core/Src/imu.c:165:9:IMU_Read	64	static
+../Core/Src/imu.c:199:6:IMU_GetAngles	56	static
+../Core/Src/imu.c:212:6:IMU_Print	56	static
