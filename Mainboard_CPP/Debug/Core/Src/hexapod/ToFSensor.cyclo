@@ -1,0 +1,2 @@
+../Core/Src/hexapod/ToFSensor.cpp:3:6:bool ToFSensor::init(I2C_HandleTypeDef*)	1
+../Core/Src/hexapod/ToFSensor.cpp:8:8:int8_t ToFSensor::read()	1

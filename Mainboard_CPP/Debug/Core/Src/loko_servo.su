@@ -1,0 +1,2 @@
+../Core/Src/loko_servo.cpp:17:21:float clampf(float, float, float)	24	static
+../Core/Src/loko_servo.cpp:23:6:void loko_solve_and_write(LokoState*)	472	static

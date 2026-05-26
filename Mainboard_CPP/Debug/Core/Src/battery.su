@@ -1,0 +1,6 @@
+../Core/Src/battery.cpp:36:6:void Battery_Init(ADC_HandleTypeDef*)	16	static
+../Core/Src/battery.cpp:42:7:float Battery_GetVoltage()	24	static
+../Core/Src/battery.cpp:62:10:uint32_t Battery_GetVddaMv()	8	static
+../Core/Src/battery.cpp:112:14:float soc_from_cell_voltage(float)	32	static
+../Core/Src/battery.cpp:135:7:float Battery_GetPercentageF(float)	24	static
+../Core/Src/battery.cpp:142:9:uint8_t Battery_GetPercentage8(float)	24	static

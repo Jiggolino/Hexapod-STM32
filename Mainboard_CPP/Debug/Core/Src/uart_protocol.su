@@ -1,0 +1,29 @@
+../Core/Src/uart_protocol.cpp:50:16:int _write(int, char*, int)	24	static
+../Core/Src/uart_protocol.cpp:56:16:int __io_putchar(int)	24	static
+../Core/Src/uart_protocol.cpp:64:12:int parse_floats(char*, float*, int)	48	static
+../Core/Src/uart_protocol.cpp:83:12:int parse_ints(char*, int*, int)	48	static
+../Core/Src/uart_protocol.cpp:103:13:void handle_servo(char*)	96	static
+../Core/Src/uart_protocol.cpp:126:13:void handle_stream(char*)	16	static
+../Core/Src/uart_protocol.cpp:133:6:void handle_current(char*)	88	static
+../Core/Src/uart_protocol.cpp:156:13:void handle_battery(char*)	16	static
+../Core/Src/uart_protocol.cpp:166:13:void handle_led_r(char*)	72	static
+../Core/Src/uart_protocol.cpp:179:13:void handle_led_l(char*)	72	static
+../Core/Src/uart_protocol.cpp:192:13:void handle_tof(char*)	16	static
+../Core/Src/uart_protocol.cpp:198:13:void handle_imu(char*)	80	static
+../Core/Src/uart_protocol.cpp:208:13:void handle_mode(char*)	24	static
+../Core/Src/uart_protocol.cpp:223:13:void handle_stab(char*)	24	static
+../Core/Src/uart_protocol.cpp:238:13:void handle_tilt(char*)	32	static
+../Core/Src/uart_protocol.cpp:248:13:void handle_state(char*)	16	static
+../Core/Src/uart_protocol.cpp:265:13:void handle_controll(char*)	56	static
+../Core/Src/uart_protocol.cpp:283:13:void handle_ledc(char*)	32	static
+../Core/Src/uart_protocol.cpp:297:13:void dispatch_line(char*)	32	static
+../Core/Src/uart_protocol.cpp:331:13:void rx_poll()	16	static
+../Core/Src/uart_protocol.cpp:370:6:void UART_Protocol_RX_Callback()	16	static
+../Core/Src/uart_protocol.cpp:394:13:void stream_tick()	96	static
+../Core/Src/uart_protocol.cpp:420:6:void UART_Protocol_Init(const UART_Protocol_Config_t*)	24	static
+../Core/Src/uart_protocol.cpp:442:6:void UART_Update()	8	static
+../Core/Src/uart_protocol.cpp:448:31:const UART_ControllerState_t* UART_GetController()	4	static
+../Core/Src/uart_protocol.cpp:449:31:UART_RobotState_t UART_GetState()	4	static
+../Core/Src/uart_protocol.cpp:450:31:const UART_LED_t* UART_GetRightLEDs()	4	static
+../Core/Src/uart_protocol.cpp:451:31:const UART_LED_t* UART_GetLeftLEDs()	4	static
+../Core/Src/uart_protocol.cpp:452:31:const UART_LED_t* UART_GetControllerLED()	4	static

@@ -1,0 +1,8 @@
+../Core/Src/hexapod/UARTInterface.cpp:3:6:void UARTInterface::init(const UART_Protocol_Config_t&)	16	static
+../Core/Src/hexapod/UARTInterface.cpp:8:6:void UARTInterface::update()	16	static
+../Core/Src/hexapod/UARTInterface.cpp:13:6:void UARTInterface::rxCallback()	16	static
+../Core/Src/hexapod/UARTInterface.cpp:18:31:const UART_ControllerState_t& UARTInterface::controller() const	16	static
+../Core/Src/hexapod/UARTInterface.cpp:23:19:UART_RobotState_t UARTInterface::state() const	16	static
+../Core/Src/hexapod/UARTInterface.cpp:28:19:const UART_LED_t* UARTInterface::rightLEDs() const	16	static
+../Core/Src/hexapod/UARTInterface.cpp:29:19:const UART_LED_t* UARTInterface::leftLEDs() const	16	static
+../Core/Src/hexapod/UARTInterface.cpp:30:19:const UART_LED_t* UARTInterface::controllerLED() const	16	static

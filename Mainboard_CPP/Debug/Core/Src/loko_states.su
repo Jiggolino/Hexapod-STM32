@@ -1,0 +1,18 @@
+../Core/Inc/loko_input.h:88:23:uint8_t loko_pressed(const LokoInputPad*, LokoInputID)	16	static
+../Core/Inc/loko_input.h:94:23:uint8_t loko_held(const LokoInputPad*, LokoInputID)	16	static
+../Core/Inc/hexapod/Controller.hpp:7:14:Controller::Controller(LokoInputPad&)	16	static
+../Core/Inc/hexapod/Controller.hpp:12:11:bool Controller::pressed(LokoInputID) const	16	static
+../Core/Inc/hexapod/Controller.hpp:16:11:bool Controller::held(LokoInputID) const	16	static
+../Core/Src/loko_states.cpp:50:6:void loko_reset_4leg_mode()	4	static
+../Core/Src/loko_states.cpp:66:13:void state_un_armed(LokoState*, const LokoInput*, float)	24	static
+../Core/Src/loko_states.cpp:72:13:void state_stand(LokoState*, const LokoInput*, float)	32	static
+../Core/Src/loko_states.cpp:85:13:void state_walk(LokoState*, const LokoInput*, float)	32	static
+../Core/Src/loko_states.cpp:127:13:void state_walk_4_legs(LokoState*, const LokoInput*, float)	40	static
+../Core/Src/loko_states.cpp:211:13:void state_stand_4_legs(LokoState*, const LokoInput*, float)	40	static
+../Core/Src/loko_states.cpp:287:13:void state_rotate_in_place(LokoState*, const LokoInput*, float)	32	static
+../Core/Src/loko_states.cpp:299:13:void state_look_around(LokoState*, const LokoInput*, float)	40	static
+../Core/Src/loko_states.cpp:321:13:void state_dancing(LokoState*, const LokoInput*, float)	24	static
+../Core/Src/loko_states.cpp:343:13:void loko_update_leds(LokoFSMState, LokoGaitMode)	16	static
+../Core/Src/loko_states.cpp:379:6:void loko_dispatch(LokoState*, const LokoInput*, float)	40	static
+../Core/Src/loko_states.cpp:416:6:void loko_get_stabilizer_angles(float*, float*)	16	static
+../Core/Src/loko_states.cpp:422:6:void loko_get_stabilizer_shift(float*, float*)	16	static

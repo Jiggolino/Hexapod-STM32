@@ -1,0 +1,15 @@
+../Core/Inc/hexapod/ServoDriver.hpp:17:16:PCA9685_t* ServoDriver::handle()	1
+../Core/Inc/hexapod/IMUSensor.hpp:8:5:IMUSensor::IMUSensor()	1
+../Core/Inc/hexapod/IMUSensor.hpp:14:23:const IMU_Data_t& IMUSensor::data() const	1
+../Core/Inc/hexapod/ToFSensor.hpp:7:5:ToFSensor::ToFSensor()	1
+../Core/Inc/hexapod/ToFSensor.hpp:12:14:uint16_t ToFSensor::distanceMm() const	1
+../Core/Inc/loko_input.h:106:21:float loko_axis(const LokoInputPad*, LokoInputID)	1
+../Core/Inc/hexapod/Controller.hpp:7:14:Controller::Controller(LokoInputPad&)	1
+../Core/Inc/hexapod/Controller.hpp:9:11:void Controller::update(const float*)	1
+../Core/Inc/hexapod/Controller.hpp:18:11:float Controller::axis(LokoInputID) const	1
+../Core/Inc/hexapod/Locomotion.hpp:11:5:Locomotion::Locomotion()	1
+../Core/Inc/hexapod/Locomotion.hpp:27:23:Controller& Locomotion::controller()	1
+../Core/Inc/hexapod/Locomotion.hpp:30:22:LokoState& Locomotion::raw()	1
+../Core/Src/hexapod/HexapodRobot.cpp:14:1:HexapodRobot::HexapodRobot(I2C_HandleTypeDef*, TIM_HandleTypeDef*, UART_HandleTypeDef*, ADC_HandleTypeDef*, ADC_HandleTypeDef*, ADC_HandleTypeDef*)	1
+../Core/Src/hexapod/HexapodRobot.cpp:30:6:bool HexapodRobot::init()	10
+../Core/Src/hexapod/HexapodRobot.cpp:89:6:void HexapodRobot::update(float)	26

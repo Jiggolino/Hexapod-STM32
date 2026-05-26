@@ -1,0 +1,4 @@
+../Core/Src/hexapod/BatteryMonitor.cpp:3:6:void BatteryMonitor::init(ADC_HandleTypeDef*)	16	static
+../Core/Src/hexapod/BatteryMonitor.cpp:8:7:float BatteryMonitor::voltage()	16	static
+../Core/Src/hexapod/BatteryMonitor.cpp:13:9:uint8_t BatteryMonitor::percent()	16	static
+../Core/Src/hexapod/BatteryMonitor.cpp:18:10:uint32_t BatteryMonitor::vddaMv()	16	static

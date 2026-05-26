@@ -1,0 +1,2 @@
+../Core/Src/current.cpp:6:6:void get_current_servos(float (*)[2])	24	static
+../Core/Src/current.cpp:42:7:float get_current_all_servos()	80	static

@@ -1,0 +1,12 @@
+../Core/Src/vl53l1_platform.cpp:14:13:void tof_i2c_recover()	4	static
+../Core/Src/vl53l1_platform.cpp:26:15:int8_t wr_bytes(uint16_t, uint16_t, const uint8_t*, uint16_t)	192	static
+../Core/Src/vl53l1_platform.cpp:48:15:int8_t rd_bytes(uint16_t, uint16_t, uint8_t*, uint16_t)	48	static
+../Core/Src/vl53l1_platform.cpp:75:8:int8_t VL53L1_WrByte(uint16_t, uint16_t, uint8_t)	16	static
+../Core/Src/vl53l1_platform.cpp:80:8:int8_t VL53L1_WrWord(uint16_t, uint16_t, uint16_t)	24	static
+../Core/Src/vl53l1_platform.cpp:86:8:int8_t VL53L1_WrDWord(uint16_t, uint16_t, uint32_t)	24	static
+../Core/Src/vl53l1_platform.cpp:95:8:int8_t VL53L1_RdByte(uint16_t, uint16_t, uint8_t*)	16	static
+../Core/Src/vl53l1_platform.cpp:100:8:int8_t VL53L1_RdWord(uint16_t, uint16_t, uint16_t*)	24	static
+../Core/Src/vl53l1_platform.cpp:108:8:int8_t VL53L1_RdDWord(uint16_t, uint16_t, uint32_t*)	24	static
+../Core/Src/vl53l1_platform.cpp:118:8:int8_t VL53L1_ReadMulti(uint16_t, uint16_t, uint8_t*, uint32_t)	24	static
+../Core/Src/vl53l1_platform.cpp:123:8:int8_t VL53L1_WriteMulti(uint16_t, uint16_t, uint8_t*, uint32_t)	24	static
+../Core/Src/vl53l1_platform.cpp:128:8:int8_t VL53L1_WaitMs(uint16_t, int32_t)	16	static

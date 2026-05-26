@@ -1,0 +1,16 @@
+../Core/Src/hexapod/LEDController.cpp:3:6:void LEDController::init(TIM_HandleTypeDef*)	16	static
+../Core/Src/hexapod/LEDController.cpp:4:6:void LEDController::tick()	16	static
+../Core/Src/hexapod/LEDController.cpp:5:6:void LEDController::off()	16	static
+../Core/Src/hexapod/LEDController.cpp:6:6:void LEDController::solid(uint8_t, uint8_t, uint8_t)	16	static
+../Core/Src/hexapod/LEDController.cpp:7:6:void LEDController::pulse(uint8_t, uint8_t, uint8_t)	16	static
+../Core/Src/hexapod/LEDController.cpp:8:6:void LEDController::morph(uint16_t)	16	static
+../Core/Src/hexapod/LEDController.cpp:9:6:void LEDController::morphRed()	16	static
+../Core/Src/hexapod/LEDController.cpp:10:6:void LEDController::morphGreen()	16	static
+../Core/Src/hexapod/LEDController.cpp:11:6:void LEDController::morphBlue()	16	static
+../Core/Src/hexapod/LEDController.cpp:12:6:void LEDController::loading()	16	static
+../Core/Src/hexapod/LEDController.cpp:13:6:void LEDController::cycleBlues()	16	static
+../Core/Src/hexapod/LEDController.cpp:14:6:void LEDController::cycleWarms()	16	static
+../Core/Src/hexapod/LEDController.cpp:15:6:void LEDController::cycleGreens()	16	static
+../Core/Src/hexapod/LEDController.cpp:17:6:void LEDController::hueCycle(const uint16_t*, uint8_t)	24	static
+../Core/Src/hexapod/LEDController.cpp:22:6:void LEDController::setPixel(ws2812_strip_t, uint8_t, uint8_t, uint8_t, uint8_t)	32	static
+../Core/Src/hexapod/LEDController.cpp:27:6:bool LEDController::show(ws2812_strip_t)	16	static

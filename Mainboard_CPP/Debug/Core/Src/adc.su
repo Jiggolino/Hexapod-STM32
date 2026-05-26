@@ -1,0 +1,14 @@
+../Core/Src/adc.c:32:6:MX_ADC1_Init	48	static
+../Core/Src/adc.c:96:6:MX_ADC2_Init	40	static
+../Core/Src/adc.c:151:6:MX_ADC3_Init	40	static
+../Core/Src/adc.c:208:6:HAL_ADC_MspInit	64	static
+../Core/Src/adc.c:283:6:HAL_ADC_MspDeInit	16	static
+../Core/Src/adc.c:353:6:ADC_Init	24	static
+../Core/Src/adc.c:362:10:ADC_ReadRaw	48	static
+../Core/Src/adc.c:379:10:ADC_ReadRawAvg	64	static
+../Core/Src/adc.c:387:10:ADC_ReadCurrentRight	8	static
+../Core/Src/adc.c:388:10:ADC_ReadCurrentLeft	8	static
+../Core/Src/adc.c:389:10:ADC_ReadBatteryRaw	8	static
+../Core/Src/adc.c:390:10:ADC_ReadVrefintRaw	8	static
+../Core/Src/adc.c:392:10:ADC_CalibrateVdda	16	static
+../Core/Src/adc.c:400:10:ADC_GetVddaMv	4	static

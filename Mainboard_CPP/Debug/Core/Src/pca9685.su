@@ -1,0 +1,11 @@
+../Core/Src/pca9685.cpp:23:13:void i2c_recover(I2C_HandleTypeDef*)	16	static
+../Core/Src/pca9685.cpp:31:26:HAL_StatusTypeDef write_reg(PCA9685_t*, uint8_t, uint8_t)	40	static
+../Core/Src/pca9685.cpp:44:26:HAL_StatusTypeDef read_reg(PCA9685_t*, uint8_t, uint8_t*)	40	static
+../Core/Src/pca9685.cpp:61:19:HAL_StatusTypeDef PCA9685_SoftwareReset(I2C_HandleTypeDef*)	32	static
+../Core/Src/pca9685.cpp:67:19:HAL_StatusTypeDef PCA9685_Init(PCA9685_t*)	24	static
+../Core/Src/pca9685.cpp:88:19:HAL_StatusTypeDef PCA9685_SetFrequency(PCA9685_t*, float)	32	static
+../Core/Src/pca9685.cpp:127:19:HAL_StatusTypeDef PCA9685_SetPWM(PCA9685_t*, uint8_t, uint16_t, uint16_t)	40	static
+../Core/Src/pca9685.cpp:139:19:HAL_StatusTypeDef PCA9685_SetServoPulse(PCA9685_t*, uint8_t, uint16_t)	24	static
+../Core/Src/pca9685.cpp:152:19:HAL_StatusTypeDef PCA9685_SetServoAngle(PCA9685_t*, uint8_t, float)	32	static
+../Core/Src/pca9685.cpp:194:6:void PCA9685_Sleep(PCA9685_t*)	24	static
+../Core/Src/pca9685.cpp:201:6:void PCA9685_Wake(PCA9685_t*)	24	static
