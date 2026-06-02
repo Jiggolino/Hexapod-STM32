@@ -14,6 +14,16 @@
 #define L2_FEMUR_LENGTH   89.80f
 #define L3_TIBIA_LENGTH  165.56f
 
+/*stick dead zone*/
+#define STICK_DEADBAND 0.1f
+
+/*Distance to disarm*/
+#define DISARM_DISTANCE 15.0f
+
+/*Distance wich it stops walking in to a wall in mm*/
+#define WALL_DETECTION_DISTANCE_SLOW 230.0f
+#define WALL_DETECTION_DISTANCE_FAST 300.0f
+
 /* ── Coxa pivot positions relative to body centre (mm) ─────────────────── */
 #define FRONT_ROW_X   125.722f   /* +X = forward  */
 #define FRONT_ROW_Y   113.425f   /* +Y = left     */
@@ -51,13 +61,15 @@
 /* These drive hexleg_init() in loko_build_default_legs().
  * L  stride half-length (mm)   H  swing height (mm)
  * R  arc-corner radius (mm)    S  shape factor (controls arc–swing join) */
-#define LOKO_TRAJ_L   50.0f
+#define LOKO_TRAJ_L   60.0f
 #define LOKO_TRAJ_H   50.0f
 #define LOKO_TRAJ_R   7.0f
 #define LOKO_TRAJ_S   2.0f
 
 /* Gait cycle period (seconds).  Phase advances at speed / period per tick. */
-#define LOKO_STRIDE_PERIOD_S  0.4f
+#define LOKO_STRIDE_PERIOD_S_TRIPOD  0.7f
+#define LOKO_STRIDE_PERIOD_S_RIPPLE  1.2f
+#define LOKO_STRIDE_PERIOD_S_WAVE    1.4f
 
 /* How much to raise front legs (mm above neutral_z) in STAND_4_LEGS. */
 #define LOKO_FRONT_RAISE_MM  20.0f
@@ -105,9 +117,9 @@
  *   Previous KI=0.01 with 3° clamp could only ever add 3° of integral output,
  *   which was too small to close the steady-state error.  0.08 / 10° winds up
  *   fast enough to reach full correction within a few hundred ms.             */
-#define STAB_LEVEL_KP  0.6f
-#define STAB_LEVEL_KI  0.010f
-#define STAB_LEVEL_KD  0.01f
+#define STAB_LEVEL_KP  0.15f
+#define STAB_LEVEL_KI  3.0f
+#define STAB_LEVEL_KD  0.015f
 #define STAB_LEVEL_I_CLAMP_RAD  (30.0f * 3.14159f / 180.0f)  /* 30° clamp  */
 
 /* Input low-pass alpha for LEVEL mode (0..1).

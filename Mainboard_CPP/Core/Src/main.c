@@ -124,9 +124,24 @@ int main(void)
   /* Release XSHUT so the VL53L1X is not holding the I2C bus during bus clear */
   HAL_GPIO_WritePin(XSHUT_GPIO_Port, XSHUT_Pin, GPIO_PIN_SET);
   HAL_Delay(5);
-  HAL_Delay(200);  /* Allow all I2C devices to finish powering up */
 
-  HAL_I2C_DeInit(&hi2c1);
+  /* On cold power-on the supply rails need time to stabilize (LiPo → BEC →
+   * 3.3V regulator).  Detect POR and wait 2.5 s; clear the flag so the next
+   * NRST/debugger reset takes the shorter path. */
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_PORRST)) {
+      __HAL_RCC_CLEAR_RESET_FLAGS();
+      HAL_Delay(2500);
+  } else {
+      HAL_Delay(200);
+  }
+
+  /* Reset the I2C1 peripheral via RCC before bit-bang bus clear.
+   * HAL_I2C_DeInit on the uninitialized handle (Instance = 0) is a no-op
+   * because MspDeInit checks Instance == I2C1; RCC force-reset guarantees
+   * a clean peripheral state regardless of what the prior firmware left. */
+  __HAL_RCC_I2C1_FORCE_RESET();
+  HAL_Delay(2);
+  __HAL_RCC_I2C1_RELEASE_RESET();
   I2C_BusClear();
   I2C1_Init();
 

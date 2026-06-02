@@ -39,7 +39,8 @@ Core/Src/loko_transitions.o: ../Core/Src/loko_transitions.cpp \
  ../Core/Inc/hexapod_ik.h ../Core/Inc/trajectory_calculator.h \
  ../Core/Inc/loko_input.h ../Core/Inc/loko_tilt.h ../Core/Inc/imu.h \
  ../Core/Inc/loko_states.h ../Core/Inc/main.h ../Core/Inc/pca9685.h \
- ../Core/Inc/hexapod/Controller.hpp ../Core/Inc/loko_input.h
+ ../Core/Inc/hexapod/Controller.hpp ../Core/Inc/loko_input.h \
+ ../Core/Inc/loko_config.h
 ../Core/Inc/loko_transitions.h:
 ../Core/Inc/lokomotion.h:
 ../Core/Inc/pca9685.h:
@@ -88,3 +89,4 @@ Core/Src/loko_transitions.o: ../Core/Src/loko_transitions.cpp \
 ../Core/Inc/pca9685.h:
 ../Core/Inc/hexapod/Controller.hpp:
 ../Core/Inc/loko_input.h:
+../Core/Inc/loko_config.h:

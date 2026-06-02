@@ -56,13 +56,16 @@ void loko_solve_and_write(LokoState *st)
         leg_point.x += (L->on_right_board ? -shift_x : shift_x);
         leg_point.y += -shift_y;
 
+        /* Invert yaw for left-side legs */
+        float leg_yaw = L->on_right_board ? st->body_yaw : -st->body_yaw;
+
         /* Apply body tilt + height (STAB_LEVEL roll/pitch, or zero in STAB_STABLE) */
         Vector3f mount_pos = { L->pivot_x, L->pivot_y, 0.0f };
         Vector3f out_ik;
         prepare_for_ik(leg_point, mount_pos,
                        L->mount_cos, L->mount_sin,
                        st->body_height,
-                       stable_roll, stable_pitch, st->body_yaw,
+                       stable_roll, -stable_pitch, leg_yaw,
                        &out_ik);
 
         L->foot_x = out_ik.x;

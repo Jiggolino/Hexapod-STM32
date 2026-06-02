@@ -29,8 +29,7 @@
 #include "main.h"
 #include "pca9685.h"
 #include "hexapod/Controller.hpp"
-
-#define STICK_DEADBAND 0.1f
+#include "loko_config.h"
 
 /* Forward declarations */
 static void Set_servo_default(LokoState *st);
@@ -168,7 +167,7 @@ void loko_update_transitions(LokoState *st)
 {
     /* R1 or Hand infront of sensor always disarms from any state. */
     Controller ctl(st->pad);
-    if (ctl.pressed(BTN_R1) || (15.0f >= (float)tof_get_distance_mm())) {
+    if (ctl.pressed(BTN_R1) || (DISARM_DISTANCE >= (float)tof_get_distance_mm())) {
         /* Disarm servos: OE HIGH = Disabled */
         HAL_GPIO_WritePin(Right_Enable_GPIO_Port, Right_Enable_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(Left_Enable_GPIO_Port,  Left_Enable_Pin,  GPIO_PIN_SET);

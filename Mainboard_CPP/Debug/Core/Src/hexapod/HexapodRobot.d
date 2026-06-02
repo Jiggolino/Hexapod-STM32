@@ -48,7 +48,8 @@ Core/Src/hexapod/HexapodRobot.o: ../Core/Src/hexapod/HexapodRobot.cpp \
  ../Core/Inc/loko_tilt.h ../Core/Inc/hexapod/Locomotion.hpp \
  ../Core/Inc/lokomotion.h ../Core/Inc/loko_transitions.h \
  ../Core/Inc/hexapod/Controller.hpp ../Core/Inc/loko_input.h \
- ../Core/Inc/main.h ../Core/Inc/i2c.h ../Core/Inc/uart_dma_tx.h
+ ../Core/Inc/main.h ../Core/Inc/i2c.h ../Core/Inc/uart_dma_tx.h \
+ ../Core/Inc/loko_config.h
 ../Core/Inc/hexapod/HexapodRobot.hpp:
 ../Core/Inc/hexapod/ServoDriver.hpp:
 ../Core/Inc/pca9685.h:
@@ -116,3 +117,4 @@ Core/Src/hexapod/HexapodRobot.o: ../Core/Src/hexapod/HexapodRobot.cpp \
 ../Core/Inc/main.h:
 ../Core/Inc/i2c.h:
 ../Core/Inc/uart_dma_tx.h:
+../Core/Inc/loko_config.h:

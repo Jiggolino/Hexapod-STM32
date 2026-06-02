@@ -7,13 +7,13 @@
 ../Core/Inc/hexapod/Controller.hpp:14:11:bool Controller::released(LokoInputID) const	1
 ../Core/Inc/hexapod/Controller.hpp:16:11:bool Controller::held(LokoInputID) const	1
 ../Core/Inc/hexapod/Controller.hpp:18:11:float Controller::axis(LokoInputID) const	1
-../Core/Src/loko_transitions.cpp:40:13:void transition_un_armed(LokoState*)	2
-../Core/Src/loko_transitions.cpp:56:13:void transition_stand(LokoState*)	10
-../Core/Src/loko_transitions.cpp:87:13:void transition_walk(LokoState*)	9
-../Core/Src/loko_transitions.cpp:114:13:void transition_walk_4_legs(LokoState*)	3
-../Core/Src/loko_transitions.cpp:127:13:void transition_stand_4_legs(LokoState*)	3
-../Core/Src/loko_transitions.cpp:140:13:void transition_rotate_in_place(LokoState*)	2
-../Core/Src/loko_transitions.cpp:147:13:void transition_dancing(LokoState*)	2
-../Core/Src/loko_transitions.cpp:154:13:void transition_look_around(LokoState*)	2
-../Core/Src/loko_transitions.cpp:167:6:void loko_update_transitions(LokoState*)	12
-../Core/Src/loko_transitions.cpp:192:13:void Set_servo_default(LokoState*)	2
+../Core/Src/loko_transitions.cpp:39:13:void transition_un_armed(LokoState*)	2
+../Core/Src/loko_transitions.cpp:55:13:void transition_stand(LokoState*)	10
+../Core/Src/loko_transitions.cpp:86:13:void transition_walk(LokoState*)	9
+../Core/Src/loko_transitions.cpp:113:13:void transition_walk_4_legs(LokoState*)	3
+../Core/Src/loko_transitions.cpp:126:13:void transition_stand_4_legs(LokoState*)	3
+../Core/Src/loko_transitions.cpp:139:13:void transition_rotate_in_place(LokoState*)	2
+../Core/Src/loko_transitions.cpp:146:13:void transition_dancing(LokoState*)	2
+../Core/Src/loko_transitions.cpp:153:13:void transition_look_around(LokoState*)	2
+../Core/Src/loko_transitions.cpp:166:6:void loko_update_transitions(LokoState*)	12
+../Core/Src/loko_transitions.cpp:191:13:void Set_servo_default(LokoState*)	2

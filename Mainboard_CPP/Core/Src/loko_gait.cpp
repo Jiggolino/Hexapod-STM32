@@ -22,7 +22,25 @@ void loko_advance_phases(LokoState *st, float vx, float vy, float wz, float dt)
     float mag = sqrtf(vx*vx + vy*vy + wz*wz);
     if (mag > 1.0f) mag = 1.0f;
 
-    const float dphase = (mag * dt) / LOKO_STRIDE_PERIOD_S;
+    static float dphase = 0;
+
+    switch(st->gait_mode){
+    case GAIT_TRIPOD:
+        dphase = (mag * dt) / LOKO_STRIDE_PERIOD_S_TRIPOD;
+    	break;
+
+    case GAIT_WAVE:
+        dphase = (mag * dt) / LOKO_STRIDE_PERIOD_S_WAVE;
+    	break;
+
+    case GAIT_RIPPLE:
+        dphase = (mag * dt) / LOKO_STRIDE_PERIOD_S_RIPPLE;
+    	break;
+
+    default:
+        dphase = (mag * dt) / LOKO_STRIDE_PERIOD_S_WAVE;
+    	break;
+    }
 
     for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
         st->legs[i].phase += dphase;

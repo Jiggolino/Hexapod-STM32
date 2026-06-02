@@ -1,3 +1,3 @@
-../Core/Src/loko_gait.cpp:20:6:void loko_advance_phases(LokoState*, float, float, float, float)	4
-../Core/Src/loko_gait.cpp:36:6:void loko_apply_gait_timing(LokoLeg*, float)	3
-../Core/Src/loko_gait.cpp:65:6:void loko_compute_foot_targets(LokoState*, float, float, float)	17
+../Core/Src/loko_gait.cpp:20:6:void loko_advance_phases(LokoState*, float, float, float, float)	8
+../Core/Src/loko_gait.cpp:54:6:void loko_apply_gait_timing(LokoLeg*, float)	3
+../Core/Src/loko_gait.cpp:83:6:void loko_compute_foot_targets(LokoState*, float, float, float)	17

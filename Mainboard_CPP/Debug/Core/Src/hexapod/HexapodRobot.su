@@ -10,6 +10,6 @@
 ../Core/Inc/hexapod/Locomotion.hpp:11:5:Locomotion::Locomotion()	16	static
 ../Core/Inc/hexapod/Locomotion.hpp:27:23:Controller& Locomotion::controller()	16	static
 ../Core/Inc/hexapod/Locomotion.hpp:30:22:LokoState& Locomotion::raw()	16	static
-../Core/Src/hexapod/HexapodRobot.cpp:14:1:HexapodRobot::HexapodRobot(I2C_HandleTypeDef*, TIM_HandleTypeDef*, UART_HandleTypeDef*, ADC_HandleTypeDef*, ADC_HandleTypeDef*, ADC_HandleTypeDef*)	32	static
-../Core/Src/hexapod/HexapodRobot.cpp:30:6:bool HexapodRobot::init()	56	static
-../Core/Src/hexapod/HexapodRobot.cpp:89:6:void HexapodRobot::update(float)	152	static
+../Core/Src/hexapod/HexapodRobot.cpp:15:1:HexapodRobot::HexapodRobot(I2C_HandleTypeDef*, TIM_HandleTypeDef*, UART_HandleTypeDef*, ADC_HandleTypeDef*, ADC_HandleTypeDef*, ADC_HandleTypeDef*)	32	static
+../Core/Src/hexapod/HexapodRobot.cpp:31:6:bool HexapodRobot::init()	56	static
+../Core/Src/hexapod/HexapodRobot.cpp:90:6:void HexapodRobot::update(float)	152	static

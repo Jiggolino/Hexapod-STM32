@@ -3,6 +3,7 @@
 #include "i2c.h"
 #include "pca9685.h"
 #include "uart_dma_tx.h"
+#include "loko_config.h"
 #include <stdio.h>
 
 #define SYS_ERR_PCA_RIGHT  (1u << 0)
@@ -116,10 +117,13 @@ void HexapodRobot::update(float /*dt_hint*/)
         input_values[AXIS_LX] = ctrl.left_stick_x;      /* Left X: raw strafe value */
 
         /* Forward/Backward with wall collision prevention */
-        if (_tofDistMm <= 250u && ctrl.left_stick_y < 0.0f)
+        if ((float)tof_get_distance_mm() <= WALL_DETECTION_DISTANCE_FAST && ctrl.left_stick_y < -0.5f)
             input_values[AXIS_LY] = 0.0f;
         else
-            input_values[AXIS_LY] = ctrl.left_stick_y;   /* Left Y: raw forward/backward */
+            if ((float)tof_get_distance_mm() <= WALL_DETECTION_DISTANCE_SLOW && ctrl.left_stick_y < 0.0f)
+                input_values[AXIS_LY] = 0.0f;
+            else
+            	input_values[AXIS_LY] = ctrl.left_stick_y;   /* Left Y: raw forward/backward */
 
         /* RIGHT STICK: Rotation and Look Control
          * X-axis → body rotation (yaw, ±30 degrees max)
