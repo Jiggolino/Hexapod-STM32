@@ -1,6 +1,0 @@
-../Core/Src/hexapod/ServoDriver.cpp:3:1:ServoDriver::ServoDriver(I2C_HandleTypeDef*, uint8_t, uint16_t, uint16_t)	24	static
-../Core/Src/hexapod/ServoDriver.cpp:13:6:bool ServoDriver::init()	16	static
-../Core/Src/hexapod/ServoDriver.cpp:18:6:void ServoDriver::setAngle(uint8_t, float)	24	static
-../Core/Src/hexapod/ServoDriver.cpp:23:6:void ServoDriver::setPulse(uint8_t, uint16_t)	16	static
-../Core/Src/hexapod/ServoDriver.cpp:28:6:void ServoDriver::sleep()	16	static
-../Core/Src/hexapod/ServoDriver.cpp:33:6:void ServoDriver::wake()	16	static

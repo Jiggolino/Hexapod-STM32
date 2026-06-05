@@ -1,4 +1,0 @@
-../Core/Src/uart_dma_tx.cpp:17:13:void start_dma_transfer()	40	static,ignoring_inline_asm
-../Core/Src/uart_dma_tx.cpp:47:6:void HAL_UART_TxCpltCallback(UART_HandleTypeDef*)	16	static
-../Core/Src/uart_dma_tx.cpp:60:6:void uart_dma_tx_init(UART_HandleTypeDef*, DMA_HandleTypeDef*)	16	static
-../Core/Src/uart_dma_tx.cpp:71:6:void uart_dma_tx_send(const uint8_t*, uint16_t)	40	static,ignoring_inline_asm

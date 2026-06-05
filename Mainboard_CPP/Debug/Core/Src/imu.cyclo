@@ -1,9 +1,0 @@
-../Core/Src/imu.cpp:16:13:void imu_i2c_recover(I2C_HandleTypeDef*)	1
-../Core/Src/imu.cpp:26:16:int32_t platform_write(void*, uint8_t, const uint8_t*, uint16_t)	5
-../Core/Src/imu.cpp:44:16:int32_t platform_read(void*, uint8_t, uint8_t*, uint16_t)	7
-../Core/Src/imu.cpp:77:13:void lpf1_reset(LPF1_t*, float)	1
-../Core/Src/imu.cpp:83:13:void lpf1_update3(LPF1_t*, float, float, float, float*, float*, float*)	1
-../Core/Src/imu.cpp:94:9:int32_t IMU_Init(I2C_HandleTypeDef*)	16
-../Core/Src/imu.cpp:165:9:int32_t IMU_Read(IMU_Data_t*)	5
-../Core/Src/imu.cpp:201:6:void IMU_GetAngles(float*, float*)	3
-../Core/Src/imu.cpp:214:6:void IMU_Print(const IMU_Data_t*)	2

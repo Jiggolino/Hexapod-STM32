@@ -26,6 +26,7 @@ void loko_advance_phases(LokoState *st, float vx, float vy, float wz, float dt)
 
     switch(st->gait_mode){
     case GAIT_TRIPOD:
+    case GAIT_OBSTACLE:
         dphase = (mag * dt) / LOKO_STRIDE_PERIOD_S_TRIPOD;
     	break;
 
@@ -80,7 +81,7 @@ void loko_apply_gait_timing(LokoLeg *leg, float beta)
 
 /* ── Foot target computation ─────────────────────────────────────────────── */
 
-void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz)
+void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz, float traj_h)
 {
     float heading[LOKO_NUM_LEGS];
     for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
@@ -127,7 +128,7 @@ void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz)
 
         for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
             if (!st->legs[i].active) continue;
-            hexleg_set_params(&st->legs[i].traj, out_L[i], LOKO_TRAJ_H, LOKO_TRAJ_R, LOKO_TRAJ_S);
+            hexleg_set_params(&st->legs[i].traj, out_L[i], traj_h, LOKO_TRAJ_R, LOKO_TRAJ_S);
             /* arc_len tables are fresh after set_params — recompute time weights */
             loko_apply_gait_timing(&st->legs[i], st->duty_factor);
             hexleg_set_icr(&st->legs[i].traj, out_C[i]);
@@ -137,7 +138,7 @@ void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz)
         for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
             if (!st->legs[i].active) continue;
             if (st->legs[i].traj.C != HEXLEG_C_STRAIGHT) {
-                hexleg_set_params(&st->legs[i].traj, LOKO_TRAJ_L, LOKO_TRAJ_H, LOKO_TRAJ_R, LOKO_TRAJ_S);
+                hexleg_set_params(&st->legs[i].traj, LOKO_TRAJ_L, traj_h, LOKO_TRAJ_R, LOKO_TRAJ_S);
                 loko_apply_gait_timing(&st->legs[i], st->duty_factor);
                 hexleg_set_icr(&st->legs[i].traj, HEXLEG_C_STRAIGHT);
             }

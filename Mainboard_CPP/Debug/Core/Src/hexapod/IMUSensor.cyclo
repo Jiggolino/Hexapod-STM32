@@ -1,3 +1,0 @@
-../Core/Src/hexapod/IMUSensor.cpp:3:6:bool IMUSensor::init(I2C_HandleTypeDef*)	1
-../Core/Src/hexapod/IMUSensor.cpp:9:6:bool IMUSensor::read()	1
-../Core/Src/hexapod/IMUSensor.cpp:14:6:void IMUSensor::getAngles(float&, float&) const	1

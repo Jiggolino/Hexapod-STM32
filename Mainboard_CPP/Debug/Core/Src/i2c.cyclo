@@ -1,2 +1,0 @@
-../Core/Src/i2c.cpp:11:6:void I2C_BusClear()	4
-../Core/Src/i2c.cpp:75:6:void I2C1_Init()	1

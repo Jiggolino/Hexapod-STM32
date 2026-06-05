@@ -212,9 +212,10 @@ static void handle_mode(char *arg)
 
     const char *gait_name = "Unknown";
     switch (s_cfg.loko->gait_mode) {
-        case GAIT_TRIPOD: gait_name = "Tripod"; break;
-        case GAIT_WAVE:   gait_name = "Wave";   break;
-        case GAIT_RIPPLE: gait_name = "Ripple"; break;
+        case GAIT_TRIPOD:   gait_name = "Tripod";   break;
+        case GAIT_WAVE:     gait_name = "Wave";     break;
+        case GAIT_RIPPLE:   gait_name = "Ripple";   break;
+        case GAIT_OBSTACLE: gait_name = "Obstacle"; break;
         default: break;
     }
     printf("/MODE/%s\n", gait_name);

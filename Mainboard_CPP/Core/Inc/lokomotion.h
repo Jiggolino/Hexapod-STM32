@@ -43,9 +43,10 @@ extern "C" {
 /* ── Gait mode enum ──────────────────────────────────────────────────────── */
 
 typedef enum {
-    GAIT_TRIPOD = 0,   /* 6 legs, 3 on ground (default)   β = 0.50  */
-    GAIT_WAVE   = 1,   /* 6 legs, 5 on ground             β = 0.833 */
-    GAIT_RIPPLE = 2,   /* 6 legs, 4 on ground (2 pairs)   β = 0.667 */
+    GAIT_TRIPOD   = 0,   /* 6 legs, 3 on ground (default)   β = 0.50  */
+    GAIT_WAVE     = 1,   /* 6 legs, 5 on ground             β = 0.833 */
+    GAIT_RIPPLE   = 2,   /* 6 legs, 4 on ground (2 pairs)   β = 0.667 */
+    GAIT_OBSTACLE = 3,   /* tripod gait, +80mm body height, +120mm swing — for rough terrain */
     GAIT_MODE_COUNT
 } LokoGaitMode;
 

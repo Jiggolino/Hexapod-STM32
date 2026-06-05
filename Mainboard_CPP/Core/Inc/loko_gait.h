@@ -12,8 +12,9 @@ void loko_advance_phases(LokoState *st, float vx, float vy, float wz, float dt);
 
 /* Compute body-frame foot targets for all legs using the ICR arc pipeline.
  * Active legs follow the trajectory; inactive legs hold neutral position.
- * Re-applies gait timing weights (from st->duty_factor) after any geometry change. */
-void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz);
+ * Re-applies gait timing weights (from st->duty_factor) after any geometry change.
+ * traj_h: swing height in mm — pass LOKO_TRAJ_H for normal walking. */
+void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz, float traj_h);
 
 /* Apply time weights to leg->traj so that foot spends beta of the cycle in
  * stance and (1-beta) in swing.  Call after any hexleg_set_params / hexleg_init.

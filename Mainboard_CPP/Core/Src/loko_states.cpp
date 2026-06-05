@@ -98,18 +98,31 @@ static void state_walk(LokoState *st, const LokoInput *in, float dt)
         0.0f,  2.0f/3, 1.0f/3, 0.0f,   2.0f/3, 1.0f/3 };
 
     const float *offsets;
+    float traj_h;
     switch (st->gait_mode) {
     case GAIT_WAVE:
         st->duty_factor = LOKO_DUTY_WAVE;
         offsets = wave_offsets;
+        st->body_height = CHASSIS_TO_SHOULDER + DESIRED_BELLY_CLEARANCE;
+        traj_h = LOKO_TRAJ_H;
         break;
     case GAIT_RIPPLE:
         st->duty_factor = LOKO_DUTY_RIPPLE;
         offsets = ripple_offsets;
+        st->body_height = CHASSIS_TO_SHOULDER + DESIRED_BELLY_CLEARANCE;
+        traj_h = LOKO_TRAJ_H;
+        break;
+    case GAIT_OBSTACLE: /* tripod motion, body raised, swing taller — for rough terrain */
+        st->duty_factor = LOKO_DUTY_TRIPOD;
+        offsets = tripod_offsets;
+        st->body_height = CHASSIS_TO_SHOULDER + DESIRED_BELLY_CLEARANCE + LOKO_OBSTACLE_BODY_EXTRA_MM;
+        traj_h = LOKO_TRAJ_H + LOKO_OBSTACLE_SWING_EXTRA_MM;
         break;
     default: /* GAIT_TRIPOD */
         st->duty_factor = LOKO_DUTY_TRIPOD;
         offsets = tripod_offsets;
+        st->body_height = CHASSIS_TO_SHOULDER + DESIRED_BELLY_CLEARANCE;
+        traj_h = LOKO_TRAJ_H;
         break;
     }
 
@@ -119,7 +132,7 @@ static void state_walk(LokoState *st, const LokoInput *in, float dt)
     }
 
     loko_advance_phases(st, in->vx, in->vy, in->wz, dt);
-    loko_compute_foot_targets(st, in->vx, in->vy, in->wz);
+    loko_compute_foot_targets(st, in->vx, in->vy, in->wz, traj_h);
     loko_solve_and_write(st);
 }
 
@@ -144,7 +157,7 @@ static void state_walk_4_legs(LokoState *st, const LokoInput *in, float dt)
 
     /* Run walk logic for legs 1,2,3,4 */
     loko_advance_phases(st, in->vx, in->vy, in->wz, dt);
-    loko_compute_foot_targets(st, in->vx, in->vy, in->wz);
+    loko_compute_foot_targets(st, in->vx, in->vy, in->wz, LOKO_TRAJ_H);
 
     /* Mid legs (1, 4) get forward offset for stability */
     st->legs[1].target.y += 100.0f;
@@ -291,7 +304,7 @@ static void state_rotate_in_place(LokoState *st, const LokoInput *in, float dt)
         st->legs[i].active = 1;
     }
     loko_advance_phases(st, 0.0f, 0.0f, in->wz, dt);
-    loko_compute_foot_targets(st, 0.0f, 0.0f, in->wz);
+    loko_compute_foot_targets(st, 0.0f, 0.0f, in->wz, LOKO_TRAJ_H);
     loko_solve_and_write(st);
 }
 
@@ -351,9 +364,10 @@ static void loko_update_leds(LokoFSMState state, LokoGaitMode gait)
         break;
     case LOKO_WALK:
         switch (gait) {
-        case GAIT_WAVE:   ws2812_mode_cycle_greens(); break;
-        case GAIT_RIPPLE: ws2812_mode_cycle_warms();  break;
-        default:          ws2812_mode_cycle_blues();  break;
+        case GAIT_WAVE:     ws2812_mode_cycle_greens();    break;
+        case GAIT_RIPPLE:   ws2812_mode_cycle_warms();     break;
+        case GAIT_OBSTACLE: ws2812_mode_solid(255, 80, 0); break; /* orange — obstacle mode */
+        default:            ws2812_mode_cycle_blues();     break;
         }
         break;
     case LOKO_WALK_4_LEGS:
@@ -390,6 +404,18 @@ void loko_dispatch(LokoState *st, const LokoInput *in, float dt)
     static LokoGaitMode prev_gait     = (LokoGaitMode)-1;
     if (st->state != prev_state || st->gait_mode != prev_gait) {
         loko_update_leds(st->state, st->gait_mode);
+
+        /* Reset all leg phases on entry/exit of rotate-in-place and 4-leg modes */
+        auto is_phase_reset_state = [](LokoFSMState s) {
+            return s == LOKO_ROTATE_IN_PLACE ||
+                   s == LOKO_WALK_4_LEGS     ||
+                   s == LOKO_STAND_4_LEGS;
+        };
+        if (is_phase_reset_state(st->state) || is_phase_reset_state(prev_state)) {
+            for (int i = 0; i < LOKO_NUM_LEGS; ++i)
+                st->legs[i].phase = 0.0f;
+        }
+
         prev_state = st->state;
         prev_gait  = st->gait_mode;
     }

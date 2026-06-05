@@ -34,7 +34,7 @@
 
 /* ── Vertical geometry (mm) ─────────────────────────────────────────────── */
 #define CHASSIS_TO_SHOULDER       40.0f   /* body bottom → coxa pivot      */
-#define DESIRED_BELLY_CLEARANCE  180.0f   /* coxa pivot → ground at stand  */
+#define DESIRED_BELLY_CLEARANCE  100.0f   /* coxa pivot → ground at stand  */
 
 /* ── Foot reach at rest (mm) ────────────────────────────────────────────── */
 /* Horizontal distance from coxa pivot to foot in the neutral stance.
@@ -62,7 +62,7 @@
  * L  stride half-length (mm)   H  swing height (mm)
  * R  arc-corner radius (mm)    S  shape factor (controls arc–swing join) */
 #define LOKO_TRAJ_L   60.0f
-#define LOKO_TRAJ_H   170.0f
+#define LOKO_TRAJ_H   50.0f
 #define LOKO_TRAJ_R   7.0f
 #define LOKO_TRAJ_S   2.0f
 
@@ -73,6 +73,12 @@
 
 /* How much to raise front legs (mm above neutral_z) in STAND_4_LEGS. */
 #define LOKO_FRONT_RAISE_MM  20.0f
+
+/* ── Obstacle mode extra height ─────────────────────────────────────────── */
+/* Body lifts this much higher off the ground (mm) in GAIT_OBSTACLE. */
+#define LOKO_OBSTACLE_BODY_EXTRA_MM   80.0f
+/* Swing trajectory is this much taller (mm) in GAIT_OBSTACLE. */
+#define LOKO_OBSTACLE_SWING_EXTRA_MM  120.0f
 
 /* ── ICR arc turning ────────────────────────────────────────────────────── */
 /* |wz| threshold below which straight-line motion is used (no per-tick
