@@ -1,0 +1,20 @@
+# Build directories
+build/
+BUILD/
+Debug/
+Release/
+*.elf
+*.hex
+*.bin
+*.o
+*.a
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
