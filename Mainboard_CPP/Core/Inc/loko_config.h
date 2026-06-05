@@ -34,7 +34,7 @@
 
 /* ── Vertical geometry (mm) ─────────────────────────────────────────────── */
 #define CHASSIS_TO_SHOULDER       40.0f   /* body bottom → coxa pivot      */
-#define DESIRED_BELLY_CLEARANCE  100.0f   /* coxa pivot → ground at stand  */
+#define DESIRED_BELLY_CLEARANCE  180.0f   /* coxa pivot → ground at stand  */
 
 /* ── Foot reach at rest (mm) ────────────────────────────────────────────── */
 /* Horizontal distance from coxa pivot to foot in the neutral stance.
@@ -62,7 +62,7 @@
  * L  stride half-length (mm)   H  swing height (mm)
  * R  arc-corner radius (mm)    S  shape factor (controls arc–swing join) */
 #define LOKO_TRAJ_L   60.0f
-#define LOKO_TRAJ_H   50.0f
+#define LOKO_TRAJ_H   170.0f
 #define LOKO_TRAJ_R   7.0f
 #define LOKO_TRAJ_S   2.0f
 
@@ -117,10 +117,15 @@
  *   Previous KI=0.01 with 3° clamp could only ever add 3° of integral output,
  *   which was too small to close the steady-state error.  0.08 / 10° winds up
  *   fast enough to reach full correction within a few hundred ms.             */
-#define STAB_LEVEL_KP  0.15f
-#define STAB_LEVEL_KI  3.0f
+#define STAB_LEVEL_KP  0.3f
+#define STAB_LEVEL_KI  5.0f
 #define STAB_LEVEL_KD  0.015f
-#define STAB_LEVEL_I_CLAMP_RAD  (30.0f * 3.14159f / 180.0f)  /* 30° clamp  */
+#define STAB_LEVEL_I_CLAMP_RAD  (10.0f * 3.14159f / 180.0f)  /* 30° clamp  */
+
+#define STAB_STABLE_KP  0.3f
+#define STAB_STABLE_KI  5.0f
+#define STAB_STABLE_KD  0.015f
+#define STAB_STABLE_I_CLAMP_RAD  (10.0f * 3.14159f / 180.0f)  /* 30° clamp  */
 
 /* Input low-pass alpha for LEVEL mode (0..1).
  * 0.5 → time constant ≈ 10 ms at 100 Hz.

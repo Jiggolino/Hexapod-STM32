@@ -2,4 +2,4 @@
 ../Core/Src/loko_stabilizer.cpp:49:14:float pid_tick(PIDState*, float, float, float, float, float, float)	6
 ../Core/Src/loko_stabilizer.cpp:78:21:float clampf(float, float, float)	3
 ../Core/Src/loko_stabilizer.cpp:85:6:void loko_stabilizer_init(LokoStabilizerConfig*)	1
-../Core/Src/loko_stabilizer.cpp:93:6:void loko_stabilizer_update(const LokoStabilizerConfig*, const IMU_Data_t*, LokoGaitMode, LokoStabMode, float, float*, float*, float*, float*)	17
+../Core/Src/loko_stabilizer.cpp:93:6:void loko_stabilizer_update(const LokoStabilizerConfig*, const IMU_Data_t*, LokoGaitMode, LokoStabMode, float, float*, float*, float*, float*)	12

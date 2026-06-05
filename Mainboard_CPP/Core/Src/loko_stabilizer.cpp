@@ -156,41 +156,16 @@ void loko_stabilizer_update(const LokoStabilizerConfig *cfg,
         float p = pid_tick(&s_level_pitch, pitch_rad, STAB_LEVEL_KP, STAB_LEVEL_KI, STAB_LEVEL_KD, STAB_LEVEL_I_CLAMP_RAD, pid_dt);
 
         *out_roll  = clampf(-r, -cfg->max_roll_rad,  cfg->max_roll_rad);
-        *out_pitch = clampf(-p, -cfg->max_pitch_rad, cfg->max_pitch_rad);
+        *out_pitch = clampf(p, -cfg->max_pitch_rad, cfg->max_pitch_rad);
 
     } else { /* STAB_STABLE */
-        /* ── STABLE: shift body so COM stays projected over support polygon ─
-         *
-         * When tilted by angle θ, the COM projects off-centre by body_height·tan(θ).
-         * Shifting the body by that same amount brings the projection back.
-         *
-         *   pitch > 0 (nose UP)    → target_x = +GAIN·tan(pitch) → body FORWARD
-         *   roll  > 0 (right DOWN) → target_y = +GAIN·tan(roll)  → body LEFT
-         *     (shifting toward the HIGH side moves COM back over polygon centre)
-         *
-         * A low-pass filter (STAB_STABLE_LPF) smooths the output so that
-         * entering/leaving the deadzone doesn't snap the servos.
+        /* ── STABLE: same PID as LEVEL, outputs shift distance ──
+         * PID corrects measured tilt toward zero; output is shift in mm.
          */
-        pid_reset(&s_level_roll);
-        pid_reset(&s_level_pitch);
+        float r = pid_tick(&s_level_roll,  roll_rad,  STAB_STABLE_KP, STAB_STABLE_KI, STAB_STABLE_KD, STAB_STABLE_I_CLAMP_RAD, pid_dt);
+        float p = pid_tick(&s_level_pitch, pitch_rad, STAB_STABLE_KP, STAB_STABLE_KI, STAB_STABLE_KD, STAB_STABLE_I_CLAMP_RAD, pid_dt);
 
-        float target_x = STAB_STABLE_GAIN * tanf(pitch_rad);
-        float target_y = -STAB_STABLE_GAIN * tanf(roll_rad);
-
-        /* Non-linear alpha: same approach as LEVEL — small remaining errors
-         * converge faster; large steps stay smooth.
-         * t is how far the target is from current as a fraction of max shift. */
-        float dx = target_x - s_stable_lpf_x;
-        float dy = target_y - s_stable_lpf_y;
-        float max_shift = cfg->max_body_shift_mm > 0.0f ? cfg->max_body_shift_mm : 1.0f;
-        float tx = dx / max_shift; if (tx < 0.0f) tx = -tx; if (tx > 1.0f) tx = 1.0f;
-        float ty = dy / max_shift; if (ty < 0.0f) ty = -ty; if (ty > 1.0f) ty = 1.0f;
-        float ax = STAB_STABLE_LPF + (1.0f - STAB_STABLE_LPF) * tx * tx;
-        float ay = STAB_STABLE_LPF + (1.0f - STAB_STABLE_LPF) * ty * ty;
-        s_stable_lpf_x = ax * target_x + (1.0f - ax) * s_stable_lpf_x;
-        s_stable_lpf_y = ay * target_y + (1.0f - ay) * s_stable_lpf_y;
-
-        *out_shift_x_mm = clampf(s_stable_lpf_x, -cfg->max_body_shift_mm, cfg->max_body_shift_mm);
-        *out_shift_y_mm = clampf(s_stable_lpf_y, -cfg->max_body_shift_mm, cfg->max_body_shift_mm);
+        *out_shift_x_mm = clampf(p * 100.0f, -cfg->max_body_shift_mm, cfg->max_body_shift_mm);
+        *out_shift_y_mm = clampf(-r * 100.0f, -cfg->max_body_shift_mm, cfg->max_body_shift_mm);
     }
 }
