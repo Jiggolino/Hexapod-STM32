@@ -94,6 +94,7 @@ void loko_stabilizer_update(const LokoStabilizerConfig *cfg,
                             const IMU_Data_t           *imu_data,
                             LokoGaitMode                gait_mode,
                             LokoStabMode                stab_mode,
+                            uint8_t                     is_walking,
                             float                       dt,
                             float                      *out_roll,
                             float                      *out_pitch,
@@ -152,8 +153,15 @@ void loko_stabilizer_update(const LokoStabilizerConfig *cfg,
         /* ── LEVEL: rotate body opposite to tilt so platform stays level ── */
         s_stable_lpf_x = s_stable_lpf_y = 0.0f;
 
-        float r = pid_tick(&s_level_roll,  roll_rad,  STAB_LEVEL_KP, STAB_LEVEL_KI, STAB_LEVEL_KD, STAB_LEVEL_I_CLAMP_RAD, pid_dt);
-        float p = pid_tick(&s_level_pitch, pitch_rad, STAB_LEVEL_KP, STAB_LEVEL_KI, STAB_LEVEL_KD, STAB_LEVEL_I_CLAMP_RAD, pid_dt);
+        /* While walking, slow the loop ~10× so per-step bobbing noise is
+         * averaged out but slow terrain tilt is still corrected. */
+        float gscale = is_walking ? STAB_LEVEL_WALK_GAIN_SCALE : 1.0f;
+        float kp = STAB_LEVEL_KP * gscale;
+        float ki = STAB_LEVEL_KI * gscale;
+        float kd = STAB_LEVEL_KD * gscale;
+
+        float r = pid_tick(&s_level_roll,  roll_rad,  kp, ki, kd, STAB_LEVEL_I_CLAMP_RAD, pid_dt);
+        float p = pid_tick(&s_level_pitch, pitch_rad, kp, ki, kd, STAB_LEVEL_I_CLAMP_RAD, pid_dt);
 
         *out_roll  = clampf(-r, -cfg->max_roll_rad,  cfg->max_roll_rad);
         *out_pitch = clampf(p, -cfg->max_pitch_rad, cfg->max_pitch_rad);

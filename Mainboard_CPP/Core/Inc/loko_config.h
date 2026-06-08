@@ -128,6 +128,13 @@
 #define STAB_LEVEL_KD  0.015f
 #define STAB_LEVEL_I_CLAMP_RAD  (10.0f * 3.14159f / 180.0f)  /* 30° clamp  */
 
+/* LEVEL mode gain scale while walking.
+ * Walking gait introduces periodic body-oscillation noise on the IMU.
+ * Scaling all LEVEL gains by this factor while walking makes the loop
+ * react ~10× slower, so the per-step bobbing averages out but slow
+ * terrain tilt (low-frequency) is still corrected.                          */
+#define STAB_LEVEL_WALK_GAIN_SCALE  0.1f
+
 #define STAB_STABLE_KP  0.3f
 #define STAB_STABLE_KI  5.0f
 #define STAB_STABLE_KD  0.015f

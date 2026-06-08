@@ -68,10 +68,36 @@ bool HexapodRobot::init()
         servoLeft.setAngle(ch, 90.0f);
     }
 
-    if (imu.init(_hi2c)) printf("LSM6DSO16IS IMU: OK\r\n");
+    /* Retry IMU init up to 3 times. The LSM6DSO can NACK on cold boot if its
+     * internal regulator hasn't fully settled, or if a prior NACK left the I2C
+     * peripheral in an error state. Same recovery pattern as PCA above. */
+    bool imu_ok = false;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        imu_ok = imu.init(_hi2c);
+        if (imu_ok) break;
+        printf("IMU: retry %d\r\n", attempt + 1);
+        HAL_I2C_DeInit(_hi2c);
+        I2C_BusClear();
+        I2C1_Init();
+        HAL_Delay(50);
+    }
+    if (imu_ok) printf("LSM6DSO16IS IMU: OK\r\n");
     else { printf("LSM6DSO16IS IMU: FAIL\r\n"); _errFlags |= SYS_ERR_IMU; }
 
-    if (tof.init(_hi2c)) printf("VL53L1X ToF:     OK\r\n");
+    /* Retry ToF init up to 3 times. VL53L1X SensorInit writes 90 registers
+     * and polls boot status — any single NACK aborts the chain, so a clean
+     * I2C state for each attempt matters more than for shorter inits. */
+    bool tof_ok = false;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        tof_ok = tof.init(_hi2c);
+        if (tof_ok) break;
+        printf("TOF: retry %d\r\n", attempt + 1);
+        HAL_I2C_DeInit(_hi2c);
+        I2C_BusClear();
+        I2C1_Init();
+        HAL_Delay(50);
+    }
+    if (tof_ok) printf("VL53L1X ToF:     OK\r\n");
     else { printf("VL53L1X ToF:     FAIL\r\n"); _errFlags |= SYS_ERR_TOF; }
 
     loko.init(servoRight, servoLeft);
@@ -180,9 +206,14 @@ void HexapodRobot::update(float /*dt_hint*/)
 
         loko.update(loko_in, dt);
 
+        /* Print transient IK errors for visibility, but do NOT latch them
+         * into _errFlags. A single unreachable target during a state
+         * transition (stabilizer settling, first STAND tick with non-zero
+         * shifts) would otherwise leave the red error LED blinking forever
+         * even though the robot is operating normally. The red LED now
+         * reflects init-time hardware health only. */
         uint32_t lerr = loko.errors();
         if (lerr) {
-            _errFlags |= SYS_ERR_LOKO;
             loko.clearErrors();
             printf("/ERR/LOKO/0x%08lx\r\n", (unsigned long)lerr);
         }

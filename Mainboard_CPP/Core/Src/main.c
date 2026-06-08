@@ -74,18 +74,12 @@ static void MPU_Config(void);
   */
 int main(void)
 {
-
   /* USER CODE BEGIN 1 */
-  /* Drive servo OE pins HIGH before anything else runs.
-   * After MCU reset all GPIOs are inputs (floating). The PCA9685 OE pin
-   * has an internal pull-down, so it immediately enables the outputs.
-   * Right_Enable = PB0   Left_Enable = PG3 */
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOG_CLK_ENABLE();
-  GPIOB->BSRR = GPIO_PIN_0;
-  GPIOG->BSRR = GPIO_PIN_3;
-  GPIOB->MODER = (GPIOB->MODER & ~(3UL << (0 * 2))) | (1UL << (0 * 2));
-  GPIOG->MODER = (GPIOG->MODER & ~(3UL << (3 * 2))) | (1UL << (3 * 2));
+  /* OE-pin priming moved to USER CODE BEGIN SysInit (after HAL_Init +
+   * SystemClock_Config). The previous location ran before the supply
+   * regulator was configured and before VOSRDY had been waited on, which
+   * could buffer a store to a not-yet-fully-clocked AHB peripheral and
+   * trap an imprecise BusFault much later in boot. */
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
@@ -107,7 +101,32 @@ int main(void)
   PeriphCommonClock_Config();
 
   /* USER CODE BEGIN SysInit */
+  /* Drive servo OE pins HIGH as early as possible after the supply, PLL,
+   * and AHB bus are stable. The PCA9685 OE has an internal pull-down, so
+   * leaving these pins floating after reset briefly enables the outputs.
+   * Right_Enable = PB0   Left_Enable = PG3 */
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
+  (void)RCC->AHB4ENR;                 /* read-back: guarantees clock is on */
+  __DSB();
+  GPIOB->BSRR  = GPIO_PIN_0;
+  GPIOG->BSRR  = GPIO_PIN_3;
+  GPIOB->MODER = (GPIOB->MODER & ~(3UL << (0 * 2))) | (1UL << (0 * 2));
+  GPIOG->MODER = (GPIOG->MODER & ~(3UL << (3 * 2))) | (1UL << (3 * 2));
+  __DSB();
 
+  /* On cold power-on the supply rails need time to stabilize (LiPo → BEC →
+   * 3.3V regulator). Detect POR and wait 2.5 s BEFORE any peripheral init
+   * that depends on a clean VDDA — most importantly MX_ADC*_Init, which
+   * enables the ADC voltage regulator and latches it into a bad state if
+   * VDDA is still ramping. Clear the flag so the next NRST/debugger reset
+   * takes the shorter path. */
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_PORRST)) {
+      __HAL_RCC_CLEAR_RESET_FLAGS();
+      HAL_Delay(2500);
+  } else {
+      HAL_Delay(200);
+  }
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -121,19 +140,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
   uart_dma_tx_init(&huart1, &hdma_usart1_tx);
 
-  /* Release XSHUT so the VL53L1X is not holding the I2C bus during bus clear */
+  /* Release XSHUT so the VL53L1X is not holding the I2C bus during bus clear.
+   * VL53L1X needs ~1.2 ms boot after XSHUT release; 10 ms is generous. */
   HAL_GPIO_WritePin(XSHUT_GPIO_Port, XSHUT_Pin, GPIO_PIN_SET);
-  HAL_Delay(5);
-
-  /* On cold power-on the supply rails need time to stabilize (LiPo → BEC →
-   * 3.3V regulator).  Detect POR and wait 2.5 s; clear the flag so the next
-   * NRST/debugger reset takes the shorter path. */
-  if (__HAL_RCC_GET_FLAG(RCC_FLAG_PORRST)) {
-      __HAL_RCC_CLEAR_RESET_FLAGS();
-      HAL_Delay(2500);
-  } else {
-      HAL_Delay(200);
-  }
+  HAL_Delay(10);
 
   /* Reset the I2C1 peripheral via RCC before bit-bang bus clear.
    * HAL_I2C_DeInit on the uninitialized handle (Instance = 0) is a no-op

@@ -84,62 +84,58 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-void HardFault_Handler(void)
-{
-  /* USER CODE BEGIN HardFault_IRQn 0 */
+/* Fault diagnostics: captured by hard/bus/usage/memmanage handlers.
+ * Inspect g_fault_info in the debugger after a fault.
+ *   CFSR bits: see ARMv7-M ARM B3.2.15
+ *   HFSR.FORCED=1 → escalated from a configurable fault; CFSR has the cause
+ *   BFAR valid if CFSR.BFARVALID; MMFAR valid if CFSR.MMARVALID
+ *   pc/lr/psr come from the auto-stacked exception frame. */
+volatile struct {
+    uint32_t kind;   /* 1=Hard 2=Bus 3=Usage 4=MemManage */
+    uint32_t cfsr;
+    uint32_t hfsr;
+    uint32_t bfar;
+    uint32_t mmfar;
+    uint32_t r0, r1, r2, r3, r12, lr, pc, psr;
+} g_fault_info;
 
-  /* USER CODE END HardFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
-    /* USER CODE END W1_HardFault_IRQn 0 */
-  }
+__attribute__((used))
+static void fault_report(uint32_t kind, uint32_t *stack)
+{
+  g_fault_info.kind  = kind;
+  g_fault_info.cfsr  = SCB->CFSR;
+  g_fault_info.hfsr  = SCB->HFSR;
+  g_fault_info.bfar  = SCB->BFAR;
+  g_fault_info.mmfar = SCB->MMFAR;
+  g_fault_info.r0    = stack[0];
+  g_fault_info.r1    = stack[1];
+  g_fault_info.r2    = stack[2];
+  g_fault_info.r3    = stack[3];
+  g_fault_info.r12   = stack[4];
+  g_fault_info.lr    = stack[5];
+  g_fault_info.pc    = stack[6];
+  g_fault_info.psr   = stack[7];
+  __asm volatile ("bkpt #0");      /* halt if a debugger is attached */
+  while (1) { }
 }
 
-/**
-  * @brief This function handles Memory management fault.
-  */
-void MemManage_Handler(void)
-{
-  /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-
-  /* USER CODE END MemoryManagement_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_MemoryManagement_IRQn 0 */
-    /* USER CODE END W1_MemoryManagement_IRQn 0 */
+#define FAULT_HANDLER(name, kind)                                   \
+  __attribute__((naked)) void name(void) {                          \
+    __asm volatile (                                                \
+      "tst lr, #4              \n"                                  \
+      "ite eq                  \n"                                  \
+      "mrseq r1, msp           \n"                                  \
+      "mrsne r1, psp           \n"                                  \
+      "mov r0, %0              \n"                                  \
+      "b fault_report          \n"                                  \
+      : : "i" (kind) : "r0", "r1"                                   \
+    );                                                              \
   }
-}
 
-/**
-  * @brief This function handles Pre-fetch fault, memory access fault.
-  */
-void BusFault_Handler(void)
-{
-  /* USER CODE BEGIN BusFault_IRQn 0 */
-
-  /* USER CODE END BusFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_BusFault_IRQn 0 */
-    /* USER CODE END W1_BusFault_IRQn 0 */
-  }
-}
-
-/**
-  * @brief This function handles Undefined instruction or illegal state.
-  */
-void UsageFault_Handler(void)
-{
-  /* USER CODE BEGIN UsageFault_IRQn 0 */
-
-  /* USER CODE END UsageFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_UsageFault_IRQn 0 */
-    /* USER CODE END W1_UsageFault_IRQn 0 */
-  }
-}
+FAULT_HANDLER(HardFault_Handler,  1)
+FAULT_HANDLER(BusFault_Handler,   2)
+FAULT_HANDLER(UsageFault_Handler, 3)
+FAULT_HANDLER(MemManage_Handler,  4)
 
 /**
   * @brief This function handles System service call via SWI instruction.

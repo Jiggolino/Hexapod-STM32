@@ -422,8 +422,16 @@ void loko_dispatch(LokoState *st, const LokoInput *in, float dt)
 
     /* Read IMU and update stabilizer every tick */
     if (IMU_Read(&st->imu_data) == 0) {
+        /* "Walking" = legs are cycling. While walking, the stabiliser slows
+         * its LEVEL-mode correction so per-step bobbing is averaged out
+         * instead of being chased every tick. */
+        uint8_t is_walking = (st->state == LOKO_WALK ||
+                              st->state == LOKO_WALK_4_LEGS ||
+                              st->state == LOKO_ROTATE_IN_PLACE ||
+                              st->state == LOKO_DANCING) ? 1u : 0u;
+
         loko_stabilizer_update(&stabilizer_cfg, &st->imu_data, st->gait_mode,
-                               st->stab_mode, dt,
+                               st->stab_mode, is_walking, dt,
                                &s_stabilizer_roll, &s_stabilizer_pitch,
                                &s_stabilizer_shift_x, &s_stabilizer_shift_y);
     }
