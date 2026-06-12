@@ -1,22 +1,21 @@
 /*
  * loko_gait.c  --  Gait phase advance and ICR arc foot-target pipeline
- *
- * loko_advance_phases()      increments per-leg phase each tick.
- * loko_compute_foot_targets() runs the three-pass ICR arc pipeline:
- *   Pass 1 — per-leg heading from effective velocity
- *   Pass 2 — ICR arc parameters (C, L) or straight-line restore
- *   Pass 3 — hexleg_point_at() → body-frame foot position
- * loko_apply_gait_timing()   converts a duty factor β into time weights so
- *                             hexleg_point_at() stretches stance and compresses
- *                             swing without changing the physical path shape.
  */
 
 #include "loko_gait.h"
 #include "loko_config.h"
 #include <math.h>
 
-/* ── Phase advance ───────────────────────────────────────────────────────── */
-
+/*
+ * Advances each leg's phase by (speed * dt / stride_period), where speed is
+ * the normalised magnitude of the velocity command clamped to [0, 1].
+ * The stride period is selected per gait mode from loko_config.h.
+ * Phases wrap within [0, 1) so each leg cycles continuously.
+ * Input:  st        — locomotion state containing per-leg phase values
+ *         vx,vy,wz  — normalised velocity components (magnitude drives speed)
+ *         dt        — elapsed time in seconds
+ * Output: void (st->legs[i].phase updated in place)
+ */
 void loko_advance_phases(LokoState *st, float vx, float vy, float wz, float dt)
 {
     float mag = sqrtf(vx*vx + vy*vy + wz*wz);
@@ -50,8 +49,17 @@ void loko_advance_phases(LokoState *st, float vx, float vy, float wz, float dt)
     }
 }
 
-/* ── Gait timing ─────────────────────────────────────────────────────────── */
-
+/*
+ * Applies a duty-factor β to a leg's time-weight table so that the stance
+ * segment occupies β of the total cycle time and the three swing segments share
+ * (1−β), preserving the physical path shape while stretching or compressing
+ * the timing.
+ *   w_stance = β / L_stance
+ *   w_air    = (1−β) / (L_arc_left + L_swing + L_arc_right)
+ * Input:  leg  — leg whose traj time-weight table is updated
+ *         beta — desired stance duty factor in (0, 1)
+ * Output: void (leg->traj time weights and leg->last_duty updated)
+ */
 void loko_apply_gait_timing(LokoLeg *leg, float beta)
 {
     float L_stance = leg->traj.arc_len[HEXLEG_SEG_STANCE];
@@ -61,17 +69,6 @@ void loko_apply_gait_timing(LokoLeg *leg, float beta)
 
     if (L_stance < 1e-6f || L_swing < 1e-6f) return;
 
-    /* Time weights that make stance occupy β of total cycle time and
-     * swing (including transition arcs) occupy (1−β).
-     *
-     *   time_len[seg] = arc_len[seg] * w[seg]    (definition in HexLeg)
-     *   sum over all segs of time_len == β + (1−β) == 1.0  (normalised)
-     *
-     * Solving:  w_stance = β / L_stance
-     *           w_air    = (1−β) / L_swing_total
-     *
-     * The three air segments (arc_left, swing, arc_right) share w_air so
-     * each gets its arc-length fraction of the total air time. */
     float w_stance = beta / L_stance;
     float w_air    = (1.0f - beta) / L_swing;
 
@@ -79,8 +76,20 @@ void loko_apply_gait_timing(LokoLeg *leg, float beta)
     leg->last_duty = beta;
 }
 
-/* ── Foot target computation ─────────────────────────────────────────────── */
-
+/*
+ * Three-pass pipeline that computes body-frame foot targets for every active leg:
+ *   Pass 1 — per-leg effective velocity in leg-local frame → heading angle
+ *   Pass 2 — if |wz| > deadband: ICR arc parameters (C, L) per leg via
+ *             hexleg_icr_compute(); else straight-line restore if currently curved
+ *   Pass 3 — hexleg_point_at() evaluates the trajectory at each leg's current
+ *             phase, producing body-frame x/y/z offsets from the leg's neutral
+ * On state entry (duty_factor changed) any active leg whose cached duty differs
+ * from the current value gets its time weights re-seeded here.
+ * Input:  st        — locomotion state with per-leg phase and geometry
+ *         vx,vy,wz  — normalised velocity command
+ *         traj_h    — swing height override in mm (state-dependent)
+ * Output: void (st->legs[i].target updated in place)
+ */
 void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz, float traj_h)
 {
     float heading[LOKO_NUM_LEGS];
@@ -102,7 +111,6 @@ void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz, floa
         heading[i] = atan2f(vleg_y, vleg_x);
     }
 
-    /* ICR arc management – only when rotating */
     if (fabsf(wz) > LOKO_ICR_WZ_DEADBAND) {
         const float v_mag = sqrtf(vx*vx + vy*vy);
         float icr_x, icr_y;
@@ -129,12 +137,11 @@ void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz, floa
         for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
             if (!st->legs[i].active) continue;
             hexleg_set_params(&st->legs[i].traj, out_L[i], traj_h, LOKO_TRAJ_R, LOKO_TRAJ_S);
-            /* arc_len tables are fresh after set_params — recompute time weights */
             loko_apply_gait_timing(&st->legs[i], st->duty_factor);
             hexleg_set_icr(&st->legs[i].traj, out_C[i]);
         }
     } else {
-        /* Straight motion – revert from ICR arcs only if currently curved */
+        /* Straight motion — revert from ICR arcs only if currently curved */
         for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
             if (!st->legs[i].active) continue;
             if (st->legs[i].traj.C != HEXLEG_C_STRAIGHT) {
@@ -145,17 +152,15 @@ void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz, floa
         }
     }
 
-    /* On state entry (duty_factor changed) or first tick, apply timing to any
-     * active leg whose cached duty doesn't match the current gait config.
-     * This covers straight-line walking where hexleg_set_params is not called
-     * per tick and timing must be seeded once. */
+    /* Re-seed timing for any active leg whose cached duty_factor is stale
+     * (covers straight-line walking where hexleg_set_params is not called
+     * per tick). */
     for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
         LokoLeg *L = &st->legs[i];
         if (L->active && (L->last_duty != st->duty_factor))
             loko_apply_gait_timing(L, st->duty_factor);
     }
 
-    /* Evaluate foot position for each leg using its own phase + offset */
     for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
         LokoLeg *L = &st->legs[i];
         if (!L->active) {
@@ -176,4 +181,5 @@ void loko_compute_foot_targets(LokoState *st, float vx, float vy, float wz, floa
         L->target.y = L->neutral_y + y;
         L->target.z = z;
         L->target_is_body_frame = 0;
-    }}
+    }
+}

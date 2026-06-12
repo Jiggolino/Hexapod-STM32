@@ -12,31 +12,41 @@
 #define SYS_ERR_TOF        (1u << 3)
 #define SYS_ERR_LOKO       (1u << 4)
 
+/*
+ * Stores peripheral handles and constructs both ServoDriver instances with
+ * their board addresses. Does not touch any hardware.
+ * Input:  hi2c  — shared I2C1 handle for all peripherals
+ *         htim  — TIM1 handle for WS2812B DMA output
+ *         huart — USART1 handle for UART protocol
+ *         hadc3 — ADC3 handle for battery voltage measurement
+ */
 HexapodRobot::HexapodRobot(I2C_HandleTypeDef *hi2c,
                             TIM_HandleTypeDef *htim,
                             UART_HandleTypeDef *huart,
-                            ADC_HandleTypeDef *hadc1,
-                            ADC_HandleTypeDef *hadc2,
                             ADC_HandleTypeDef *hadc3)
     : servoRight(hi2c, PCA9685_ADDR_RIGHT),
       servoLeft (hi2c, PCA9685_ADDR_LEFT),
       _hi2c(hi2c), _htim(htim), _huart(huart),
-      _hadc1(hadc1), _hadc2(hadc2), _hadc3(hadc3),
+      _hadc3(hadc3),
       _errFlags(0), _tofDistMm(0xFFFF),
       _imuLastMs(0), _tofLastMs(0), _lokoLastMs(0),
       controller(loko.controller())
 {
 }
 
+/*
+ * Sequentially initialises every subsystem with retry loops on I2C failures.
+ * Order: UART (so printf works) → battery → PCA9685 ×2 → servo center → IMU → ToF → locomotion → LEDs.
+ * Each peripheral retries up to 3–5 times with I2C bus-clear between attempts.
+ * Failures set bits in _errFlags; the robot is considered healthy only when _errFlags == 0.
+ * Output: true if all hardware initialised without errors
+ */
 bool HexapodRobot::init()
 {
-    /* Bring up UART protocol first so printf works */
     UART_Protocol_Config_t cfg;
     cfg.huart             = _huart;
     cfg.pca_right         = servoRight.handle();
     cfg.pca_left          = servoLeft.handle();
-    cfg.adc_current_right = _hadc1;
-    cfg.adc_current_left  = _hadc2;
     cfg.loko              = &loko.raw();
     uart.init(cfg);
 
@@ -44,7 +54,6 @@ bool HexapodRobot::init()
     printf("/BATTERY/VDDA/%lu mV\r\n", (unsigned long)battery.vddaMv());
     printf("\r\n=== Hexapod Mainboard (C++) ===\r\n");
 
-    /* Retry PCA9685 init up to 5 times */
     bool pca_r = false, pca_l = false;
     for (int attempt = 0; attempt < 5; attempt++) {
         pca_r = servoRight.init();
@@ -62,15 +71,13 @@ bool HexapodRobot::init()
     if (pca_l) printf("PCA9685 Left:  OK\r\n");
     else { printf("PCA9685 Left:  FAIL\r\n"); _errFlags |= SYS_ERR_PCA_LEFT; }
 
-    /* Pre-load servo registers at center before arming */
     for (uint8_t ch = 0; ch < 9; ch++) {
         servoRight.setAngle(ch, 90.0f);
         servoLeft.setAngle(ch, 90.0f);
     }
 
-    /* Retry IMU init up to 3 times. The LSM6DSO can NACK on cold boot if its
-     * internal regulator hasn't fully settled, or if a prior NACK left the I2C
-     * peripheral in an error state. Same recovery pattern as PCA above. */
+    /* The LSM6DSO can NACK on cold boot if its internal regulator hasn't fully
+     * settled, or if a prior NACK left the I2C peripheral in an error state. */
     bool imu_ok = false;
     for (int attempt = 0; attempt < 3; attempt++) {
         imu_ok = imu.init(_hi2c);
@@ -84,9 +91,8 @@ bool HexapodRobot::init()
     if (imu_ok) printf("LSM6DSO16IS IMU: OK\r\n");
     else { printf("LSM6DSO16IS IMU: FAIL\r\n"); _errFlags |= SYS_ERR_IMU; }
 
-    /* Retry ToF init up to 3 times. VL53L1X SensorInit writes 90 registers
-     * and polls boot status — any single NACK aborts the chain, so a clean
-     * I2C state for each attempt matters more than for shorter inits. */
+    /* VL53L1X SensorInit writes 90 registers and polls boot status — any single
+     * NACK aborts the chain, so a clean I2C state per attempt is critical. */
     bool tof_ok = false;
     for (int attempt = 0; attempt < 3; attempt++) {
         tof_ok = tof.init(_hi2c);
@@ -113,12 +119,27 @@ bool HexapodRobot::init()
     return _errFlags == 0;
 }
 
+/*
+ * Main loop tick. Runs three independent rate-limited tasks:
+ *   20 Hz  — ToF distance poll
+ *   100 Hz — IMU read, controller input mapping, locomotion FSM update
+ * Additionally drains the UART RX ring buffer and ticks the LED animation
+ * every call. Blinks the red GPIO LED if any init error is latched.
+ *
+ * Button/axis mapping (bitmasks from /CONTROLL packet):
+ *   face_buttons:    X=bit0  A=bit1  B=bit2  Y=bit3
+ *   stick_buttons:   L3=bit0 R3=bit1
+ *   trigger_buttons: LT=bit0 View=bit1 LB=bit2 RT=bit3 RB=bit4 Start=bit5
+ *   dpad_x/y:        negative = left/up, positive = right/down
+ *
+ * Input:  dt_hint — unused; actual dt is computed from HAL_GetTick()
+ * Output: void
+ */
 void HexapodRobot::update(float /*dt_hint*/)
 {
     uart.update();
     leds.tick();
 
-    /* 20 Hz ToF tick */
     uint32_t now = HAL_GetTick();
     if (now - _tofLastMs >= 50u) {
         _tofLastMs = now;
@@ -126,7 +147,6 @@ void HexapodRobot::update(float /*dt_hint*/)
             _tofDistMm = tof.distanceMm();
     }
 
-    /* 100 Hz locomotion tick */
     now = HAL_GetTick();
     if (now - _lokoLastMs >= 10u) {
         float dt = (float)(now - _lokoLastMs) * 0.001f;
@@ -135,41 +155,28 @@ void HexapodRobot::update(float /*dt_hint*/)
         float input_values[LOKO_INPUT_COUNT] = {0};
         const UART_ControllerState_t &ctrl = uart.controller();
 
-        /* LEFT STICK: Position/Movement Control
-         * X-axis → lateral strafe (±50mm max)
-         * Y-axis → forward/backward (with wall collision at 250mm)
-         * Store raw values; negations applied at LokoInput mapping
-         */
-        input_values[AXIS_LX] = ctrl.left_stick_x;      /* Left X: raw strafe value */
+        input_values[AXIS_LX] = ctrl.left_stick_x;
 
-        /* Forward/Backward with wall collision prevention */
+        /* Block forward movement when an obstacle is within wall-detection range */
         if ((float)tof_get_distance_mm() <= WALL_DETECTION_DISTANCE_FAST && ctrl.left_stick_y < -0.5f)
             input_values[AXIS_LY] = 0.0f;
+        else if ((float)tof_get_distance_mm() <= WALL_DETECTION_DISTANCE_SLOW && ctrl.left_stick_y < 0.0f)
+            input_values[AXIS_LY] = 0.0f;
         else
-            if ((float)tof_get_distance_mm() <= WALL_DETECTION_DISTANCE_SLOW && ctrl.left_stick_y < 0.0f)
-                input_values[AXIS_LY] = 0.0f;
-            else
-            	input_values[AXIS_LY] = ctrl.left_stick_y;   /* Left Y: raw forward/backward */
+            input_values[AXIS_LY] = ctrl.left_stick_y;
 
-        /* RIGHT STICK: Rotation and Look Control
-         * X-axis → body rotation (yaw, ±30 degrees max)
-         * Y-axis → pitch/look angle (±30 degrees max)
-         * RX: negate for V1 compatibility; RY: raw value
-         */
-        input_values[AXIS_RX] = -ctrl.right_stick_x;    /* Right X (negated): yaw rotation */
-        input_values[AXIS_RY] = ctrl.right_stick_y;     /* Right Y: raw pitch/look value */
+        /* Right stick X is negated to match V1 hardware stick orientation */
+        input_values[AXIS_RX] = -ctrl.right_stick_x;
+        input_values[AXIS_RY] =  ctrl.right_stick_y;
 
-        /* Face buttons: X(1) A(2) B(4) Y(8) */
         input_values[BTN_SQUARE]   = (ctrl.face_buttons & (1 << 0)) ? 1.0f : 0.0f;
         input_values[BTN_CROSS]    = (ctrl.face_buttons & (1 << 1)) ? 1.0f : 0.0f;
         input_values[BTN_CIRCLE]   = (ctrl.face_buttons & (1 << 2)) ? 1.0f : 0.0f;
         input_values[BTN_TRIANGLE] = (ctrl.face_buttons & (1 << 3)) ? 1.0f : 0.0f;
 
-        /* Stick clicks: L3(1), R3(2) */
         input_values[BTN_L3] = (ctrl.stick_buttons & (1 << 0)) ? 1.0f : 0.0f;
         input_values[BTN_R3] = (ctrl.stick_buttons & (1 << 1)) ? 1.0f : 0.0f;
 
-        /* Trigger/shoulder: LT(1) View(2) LB(4) RT(8) RB(16) Start(32) */
         input_values[BTN_L2]      = (ctrl.trigger_buttons & (1 << 0)) ? 1.0f : 0.0f;
         input_values[BTN_SHARE]   = (ctrl.trigger_buttons & (1 << 1)) ? 1.0f : 0.0f;
         input_values[BTN_L1]      = (ctrl.trigger_buttons & (1 << 2)) ? 1.0f : 0.0f;
@@ -177,13 +184,11 @@ void HexapodRobot::update(float /*dt_hint*/)
         input_values[BTN_R1]      = (ctrl.trigger_buttons & (1 << 4)) ? 1.0f : 0.0f;
         input_values[BTN_OPTIONS] = (ctrl.trigger_buttons & (1 << 5)) ? 1.0f : 0.0f;
 
-        /* D-pad */
         input_values[BTN_DPAD_LEFT]  = (ctrl.dpad_x < 0) ? 1.0f : 0.0f;
         input_values[BTN_DPAD_RIGHT] = (ctrl.dpad_x > 0) ? 1.0f : 0.0f;
         input_values[BTN_DPAD_UP]    = (ctrl.dpad_y < 0) ? 1.0f : 0.0f;
         input_values[BTN_DPAD_DOWN]  = (ctrl.dpad_y > 0) ? 1.0f : 0.0f;
 
-        /* Read IMU every locomotion tick so the stabilizer has fresh data */
         imu.read();
         loko.raw().imu_data = imu.data();
 
@@ -193,25 +198,19 @@ void HexapodRobot::update(float /*dt_hint*/)
         LokoInput loko_in;
         loko_default_input(&loko_in);
 
-        /* Map locomotion inputs with negations applied here (matching V1)
-         * LokoInput expects normalized [-1, 1] values:
-         *   vx: forward (+) / backward (−), max ≈ forward velocity
-         *   vy: left (+) / right (−), max ±50mm lateral movement
-         *   wz: CCW (+) / CW (−), max ±30 degrees rotation
-         * Note: Right stick Y (pitch) is handled by LOOK_AROUND state handler
-         */
-        loko_in.vx = -controller.axis(AXIS_LY);    /* Forward/backward from left stick Y (negated) */
-        loko_in.vy = -controller.axis(AXIS_LX);    /* Left/right strafe from left stick X (negated, ±50mm) */
-        loko_in.wz =  controller.axis(AXIS_RX);    /* Yaw rotation from right stick X (±30°) */
+        /* Negations here match V1 stick convention:
+         *   vx: left-stick Y negated → forward (+) / backward (−)
+         *   vy: left-stick X negated → right (+) / left (−), ±50 mm lateral
+         *   wz: right-stick X already negated above → CCW (+) / CW (−), ±30° */
+        loko_in.vx = -controller.axis(AXIS_LY);
+        loko_in.vy = -controller.axis(AXIS_LX);
+        loko_in.wz =  controller.axis(AXIS_RX);
 
         loko.update(loko_in, dt);
 
-        /* Print transient IK errors for visibility, but do NOT latch them
-         * into _errFlags. A single unreachable target during a state
-         * transition (stabilizer settling, first STAND tick with non-zero
-         * shifts) would otherwise leave the red error LED blinking forever
-         * even though the robot is operating normally. The red LED now
-         * reflects init-time hardware health only. */
+        /* IK errors are printed for visibility but NOT latched into _errFlags.
+         * A transient unreachable target during a state transition would
+         * permanently light the red error LED even though the robot is fine. */
         uint32_t lerr = loko.errors();
         if (lerr) {
             loko.clearErrors();
@@ -219,7 +218,6 @@ void HexapodRobot::update(float /*dt_hint*/)
         }
     }
 
-    /* Error indication: blink red LED */
     if (_errFlags) {
         static uint32_t err_blink_ms    = 0;
         static uint8_t  err_blink_state = 0;

@@ -53,11 +53,6 @@ int32_t IMU_Read(IMU_Data_t *out);
  */
 void IMU_GetAngles(float *out_roll_deg, float *out_pitch_deg);
 
-/**
- * @brief  Print IMU data over UART.
- */
-void IMU_Print(const IMU_Data_t *data);
-
 #ifdef __cplusplus
 }
 #endif

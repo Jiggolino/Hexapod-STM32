@@ -1,27 +1,28 @@
 #include "i2c.h"
 
-I2C_HandleTypeDef hi2c1;
+/* hi2c1 is defined in i2c_msp.c */
 
-/* Release any slave that held the I2C bus when the MCU reset.
- *
- * Always sends 9 clocks unconditionally, then issues a STOP. Repeated 18
- * rounds so even a slave deep inside a long transaction reaches a byte
- * boundary and recognises the STOP. SDA is kept as INPUT during clocking so
- * the slave can drive its data bits; switched to output only for STOP. */
+/*
+ * Clocks 9 SCL pulses with SDA as input (letting any stuck slave drive its bits),
+ * then issues a STOP condition, for 18 consecutive rounds. This ensures even a
+ * slave deep in a long transaction reaches a byte boundary and recognises the STOP.
+ * Breaks early if SDA is observed high, indicating the bus is free.
+ * Leaves SCL and SDA as open-drain outputs ready for I2C1_Init().
+ * Input:  none (operates directly on GPIOB pins 8 = SCL, 9 = SDA)
+ * Output: void
+ */
 void I2C_BusClear(void)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
     __HAL_RCC_GPIOB_CLK_ENABLE();
 
-    /* SCL = PB8 open-drain output */
     GPIO_InitStruct.Pin   = GPIO_PIN_8;
     GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_OD;
     GPIO_InitStruct.Pull  = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    /* SDA = PB9 input (let slave drive) */
     GPIO_InitStruct.Pin  = GPIO_PIN_9;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -52,7 +53,6 @@ void I2C_BusClear(void)
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
         HAL_Delay(1);
 
-        /* Switch SDA back to input for next round */
         GPIO_InitStruct.Pin  = GPIO_PIN_9;
         GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
         GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -61,7 +61,7 @@ void I2C_BusClear(void)
         if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_9) == GPIO_PIN_SET) break;
     }
 
-    /* Final STOP with SDA as output (leaves pins clean for I2C1_Init) */
+    /* Final STOP: leaves pins clean for I2C1_Init() */
     GPIO_InitStruct.Pin   = GPIO_PIN_9;
     GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_OD;
     GPIO_InitStruct.Pull  = GPIO_NOPULL;
@@ -72,6 +72,13 @@ void I2C_BusClear(void)
     HAL_Delay(1);
 }
 
+/*
+ * Re-initialises the I2C1 peripheral at 400 kHz (Fast-mode) using the
+ * timing register value pre-calculated for 64 MHz PCLK1, with analog and
+ * digital filters enabled. Called after I2C_BusClear() to restore normal
+ * operation after a bus-stuck recovery.
+ * Output: void
+ */
 void I2C1_Init(void)
 {
     hi2c1.Instance             = I2C1;

@@ -3,25 +3,24 @@
  *
  * Reads st->pad (filled by loko_input_update() each tick) and sets
  * st->state when a condition is met.  Edge detection is provided by
- * loko_pressed() / loko_released() from loko_input.h — no manual
- * prev-state tracking needed here.
+ * loko_pressed() / loko_released() from loko_input.h.
  *
  * Full transition map
  * ───────────────────
- *  R1 press  (any state)         → UN_ARMED
- *  L1 press  in UN_ARMED         → STAND
- *  left stick moved in STAND        → WALK
- *  left stick released in WALK      → STAND
- *  Square press in STAND/WALK       → STAND_4_LEGS
- *  left stick moved in STAND_4_LEGS → WALK_4_LEGS
- *  left stick released in WALK_4_LEGS → STAND_4_LEGS
+ *  R1 press  (any state)               → UN_ARMED
+ *  L1 press  in UN_ARMED               → STAND
+ *  left stick moved in STAND           → WALK
+ *  left stick released in WALK         → STAND
+ *  Square press in STAND/WALK          → STAND_4_LEGS
+ *  left stick moved in STAND_4_LEGS    → WALK_4_LEGS
+ *  left stick released in WALK_4_LEGS  → STAND_4_LEGS
  *  Circle press in WALK_4_LEGS/STAND_4_LEGS → STAND
- *  Triangle press in STAND          → DANCING
- *  Circle  press in DANCING         → STAND
- *  L2 held  in STAND                → ROTATE_IN_PLACE
- *  L2 released in ROTATE            → STAND
- *  R2 held  in STAND                → LOOK_AROUND  (saves stab_mode)
- *  R2 released in LOOK_AROUND       → STAND        (restores stab_mode, resets body_yaw/pitch)
+ *  Triangle press in STAND             → DANCING
+ *  Circle  press in DANCING            → STAND
+ *  L2 held  in STAND                   → ROTATE_IN_PLACE
+ *  L2 released in ROTATE               → STAND
+ *  R2 held  in STAND                   → LOOK_AROUND  (saves stab_mode)
+ *  R2 released in LOOK_AROUND          → STAND        (restores stab_mode, resets body_yaw/pitch)
  */
 
 #include "loko_transitions.h"
@@ -31,19 +30,23 @@
 #include "hexapod/Controller.hpp"
 #include "loko_config.h"
 
-/* Forward declarations */
 static void Set_servo_default(LokoState *st);
 
 /* ── Per-state transition functions ─────────────────────────────────────── */
 
+/*
+ * UN_ARMED → STAND on L1 press: centers all servos first, then enables both
+ * PCA9685 OE pins (active-low, staggered 50 ms to limit power spike).
+ * Input:  st — locomotion state
+ * Output: void
+ */
 static void transition_un_armed(LokoState *st)
 {
     Controller ctl(st->pad);
     if (ctl.pressed(BTN_L1)) {
         Set_servo_default(st);
 
-        /* Arm the servos: OE is Active Low, so RESET enables outputs. 
-         * Staggered to reduce power spikes. */
+        /* OE is Active Low — RESET enables servo outputs. */
         HAL_GPIO_WritePin(Right_Enable_GPIO_Port, Right_Enable_Pin, GPIO_PIN_RESET);
         HAL_Delay(50);
         HAL_GPIO_WritePin(Left_Enable_GPIO_Port,  Left_Enable_Pin,  GPIO_PIN_RESET);
@@ -52,6 +55,14 @@ static void transition_un_armed(LokoState *st)
     }
 }
 
+/*
+ * STAND transitions: Square → STAND_4_LEGS, Triangle → DANCING,
+ * D-pad left/right → cycle gait, D-pad up/down → cycle stabiliser mode,
+ * L2 held → ROTATE_IN_PLACE, R2 held → LOOK_AROUND (saves stab_mode),
+ * left stick outside deadband → WALK.
+ * Input:  st — locomotion state
+ * Output: void
+ */
 static void transition_stand(LokoState *st)
 {
     Controller ctl(st->pad);
@@ -83,6 +94,12 @@ static void transition_stand(LokoState *st)
         st->state = LOKO_WALK;
 }
 
+/*
+ * WALK transitions: same gait/stab cycle as STAND; L2 held → ROTATE_IN_PLACE;
+ * left stick returns inside deadband → STAND.
+ * Input:  st — locomotion state
+ * Output: void
+ */
 static void transition_walk(LokoState *st)
 {
     Controller ctl(st->pad);
@@ -110,6 +127,11 @@ static void transition_walk(LokoState *st)
     }
 }
 
+/*
+ * WALK_4_LEGS: Circle → STAND; left stick inside deadband → STAND_4_LEGS.
+ * Input:  st — locomotion state
+ * Output: void
+ */
 static void transition_walk_4_legs(LokoState *st)
 {
     Controller ctl(st->pad);
@@ -123,6 +145,11 @@ static void transition_walk_4_legs(LokoState *st)
         st->state = LOKO_STAND_4_LEGS;
 }
 
+/*
+ * STAND_4_LEGS: Circle → STAND; left stick outside deadband → WALK_4_LEGS.
+ * Input:  st — locomotion state
+ * Output: void
+ */
 static void transition_stand_4_legs(LokoState *st)
 {
     Controller ctl(st->pad);
@@ -136,6 +163,11 @@ static void transition_stand_4_legs(LokoState *st)
         st->state = LOKO_WALK_4_LEGS;
 }
 
+/*
+ * ROTATE_IN_PLACE: L2 released → STAND.
+ * Input:  st — locomotion state
+ * Output: void
+ */
 static void transition_rotate_in_place(LokoState *st)
 {
     Controller ctl(st->pad);
@@ -143,6 +175,11 @@ static void transition_rotate_in_place(LokoState *st)
         st->state = LOKO_STAND;
 }
 
+/*
+ * DANCING: Circle pressed → STAND.
+ * Input:  st — locomotion state
+ * Output: void
+ */
 static void transition_dancing(LokoState *st)
 {
     Controller ctl(st->pad);
@@ -150,6 +187,12 @@ static void transition_dancing(LokoState *st)
         st->state = LOKO_STAND;
 }
 
+/*
+ * LOOK_AROUND: R2 released → STAND; resets body_yaw and body_pitch, restores
+ * the stab_mode that was saved on entry.
+ * Input:  st — locomotion state
+ * Output: void
+ */
 static void transition_look_around(LokoState *st)
 {
     Controller ctl(st->pad);
@@ -163,12 +206,18 @@ static void transition_look_around(LokoState *st)
 
 /* ── Switch dispatcher ───────────────────────────────────────────────────── */
 
+/*
+ * Checks the global disarm condition first (R1 press or ToF distance ≤
+ * DISARM_DISTANCE), then delegates to the per-state transition function.
+ * Disarming immediately disables both PCA9685 OE pins (high = disabled) and
+ * sets state to UN_ARMED from any state.
+ * Input:  st — locomotion state with current pad input
+ * Output: void (st->state updated)
+ */
 void loko_update_transitions(LokoState *st)
 {
-    /* R1 or Hand infront of sensor always disarms from any state. */
     Controller ctl(st->pad);
     if (ctl.pressed(BTN_R1) || (DISARM_DISTANCE >= (float)tof_get_distance_mm())) {
-        /* Disarm servos: OE HIGH = Disabled */
         HAL_GPIO_WritePin(Right_Enable_GPIO_Port, Right_Enable_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(Left_Enable_GPIO_Port,  Left_Enable_Pin,  GPIO_PIN_SET);
         st->state = LOKO_UN_ARMED;
@@ -188,9 +237,14 @@ void loko_update_transitions(LokoState *st)
     }
 }
 
+/*
+ * Commands all 9 channels on both boards to 90° (mechanical mid-point) before
+ * enabling servo power, preventing sudden jumps on arm.
+ * Input:  st — locomotion state with valid pca_right and pca_left handles
+ * Output: void
+ */
 static void Set_servo_default(LokoState *st)
 {
-    /* Set all 9 used channels on both boards to 90 degrees (mid-point) */
     for (int i = 0; i < 9; i++) {
         PCA9685_SetServoAngle(st->pca_right, i, 90.0f);
         PCA9685_SetServoAngle(st->pca_left,  i, 90.0f);

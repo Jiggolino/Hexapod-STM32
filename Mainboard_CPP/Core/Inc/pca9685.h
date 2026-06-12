@@ -88,12 +88,6 @@ HAL_StatusTypeDef PCA9685_SetServoAngle(PCA9685_t *dev, uint8_t ch,
 HAL_StatusTypeDef PCA9685_SetServoPulse(PCA9685_t *dev, uint8_t ch,
                                          uint16_t pulse_us);
 
-/** @brief  Put device into low-power sleep mode. */
-void PCA9685_Sleep(PCA9685_t *dev);
-
-/** @brief  Wake device from sleep. */
-void PCA9685_Wake(PCA9685_t *dev);
-
 #ifdef __cplusplus
 }
 #endif

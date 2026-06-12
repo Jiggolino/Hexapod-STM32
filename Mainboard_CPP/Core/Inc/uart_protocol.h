@@ -75,8 +75,6 @@ typedef struct {
     UART_HandleTypeDef *huart;
     PCA9685_t          *pca_right;
     PCA9685_t          *pca_left;
-    ADC_HandleTypeDef  *adc_current_right;  /* 12-bit ADC for right-side mux  */
-    ADC_HandleTypeDef  *adc_current_left;   /* 12-bit ADC for left-side  mux  */
     LokoState          *loko;               /* Locomotion state for mode queries */
 } UART_Protocol_Config_t;
 
@@ -97,10 +95,7 @@ const UART_ControllerState_t *UART_GetController(void);
 /** Latest armed/disarmed state. */
 UART_RobotState_t UART_GetState(void);
 
-/** Latest colour+brightness sent by the host for each lightbar.
- *  Returns NULL before Init. Arrays have length 3 for LED_R/LED_L. */
-const UART_LED_t *UART_GetRightLEDs(void);
-const UART_LED_t *UART_GetLeftLEDs(void);
+/** Latest colour+brightness sent by the host for the controller lightbar. */
 const UART_LED_t *UART_GetControllerLED(void);
 
 #ifdef __cplusplus

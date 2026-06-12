@@ -13,6 +13,14 @@
 #include <stdio.h>
 #include <string.h>
 
+/*
+ * Resets the I2C peripheral state machine to READY and clears pending error
+ * flags in the hardware ICR register. After a NACK the HAL sets State to
+ * HAL_I2C_STATE_BUSY, causing every subsequent call to return HAL_BUSY instantly
+ * without attempting a real transaction.
+ * Input:  hi2c — I2C handle to recover
+ * Output: void
+ */
 static void imu_i2c_recover(I2C_HandleTypeDef *hi2c)
 {
     hi2c->State     = HAL_I2C_STATE_READY;
@@ -21,8 +29,17 @@ static void imu_i2c_recover(I2C_HandleTypeDef *hi2c)
 }
 
 /* HAL expects 8-bit address (7-bit << 1).  SA0 low → 0x6A → 0xD4 */
-#define IMU_I2C_ADDR_8BIT  (LSM6DSO16IS_I2C_ADDR << 1)   /* 0x6A << 1 = 0xD4 */
+#define IMU_I2C_ADDR_8BIT  (LSM6DSO16IS_I2C_ADDR << 1)
 
+/*
+ * Writes len bytes to the IMU register at address reg. Retries up to 3 times
+ * with I2C state recovery between attempts.
+ * Input:  handle — I2C_HandleTypeDef* cast to void*
+ *         reg    — target register address
+ *         buf    — data bytes to write
+ *         len    — number of bytes (max 255)
+ * Output: 0 on success, -1 on failure
+ */
 static int32_t platform_write(void *handle, uint8_t reg, const uint8_t *buf, uint16_t len)
 {
     I2C_HandleTypeDef *hi2c = (I2C_HandleTypeDef *)handle;
@@ -41,6 +58,15 @@ static int32_t platform_write(void *handle, uint8_t reg, const uint8_t *buf, uin
     return (s == HAL_OK) ? 0 : -1;
 }
 
+/*
+ * Reads len bytes from the IMU register at address reg. Retries up to 3 times
+ * with I2C state recovery between attempts.
+ * Input:  handle — I2C_HandleTypeDef* cast to void*
+ *         reg    — source register address
+ *         buf    — destination buffer
+ *         len    — number of bytes to read
+ * Output: 0 on success, -1 on failure
+ */
 static int32_t platform_read(void *handle, uint8_t reg, uint8_t *buf, uint16_t len)
 {
     I2C_HandleTypeDef *hi2c = (I2C_HandleTypeDef *)handle;
@@ -74,12 +100,24 @@ typedef struct {
 static LPF1_t accel_lpf = {0};
 static LPF1_t gyro_lpf  = {0};
 
+/*
+ * Resets a first-order IIR LPF and sets its smoothing coefficient.
+ * Input:  f     — filter state to zero
+ *         alpha — smoothing factor in (0, 1]; 1.0 = no filtering
+ * Output: void
+ */
 static void lpf1_reset(LPF1_t *f, float alpha)
 {
     f->alpha = alpha;
     f->x_filt = f->y_filt = f->z_filt = 0.0f;
 }
 
+/*
+ * Updates a 3-axis IIR LPF: y[n] = α·x[n] + (1−α)·y[n−1]
+ * Input:  f          — filter state
+ *         rx, ry, rz — raw input samples
+ * Output: *ox, *oy, *oz — filtered output samples
+ */
 static void lpf1_update3(LPF1_t *f, float rx, float ry, float rz,
                          float *ox, float *oy, float *oz)
 {
@@ -91,6 +129,13 @@ static void lpf1_update3(LPF1_t *f, float rx, float ry, float rz,
     *oz = f->z_filt;
 }
 
+/*
+ * Verifies WHO_AM_I (must be 0x6C), soft-resets the chip, configures accel at
+ * ±2 g / 52 Hz with hardware LP2 filter, gyro at ±250 dps / 52 Hz, enables
+ * block data update, and seeds both software IIR LPFs (α = 0.1).
+ * Input:  hi2c — I2C1 handle; waits up to 100 ms for READY state
+ * Output: 0 on success, -1 or HAL error code on failure
+ */
 int32_t IMU_Init(I2C_HandleTypeDef *hi2c)
 {
     int32_t ret = 0;
@@ -126,7 +171,6 @@ int32_t IMU_Init(I2C_HandleTypeDef *hi2c)
     }
     printf("IMU: LSM6DSO detected (WHO_AM_I=0x%02X)\r\n", whoami);
 
-    /* Soft reset */
     ret = lsm6dso_reset_set(&imu_dev_ctx, PROPERTY_ENABLE);
     if (ret != 0) { printf("IMU: reset failed\r\n"); return ret; }
     HAL_Delay(50);
@@ -150,7 +194,7 @@ int32_t IMU_Init(I2C_HandleTypeDef *hi2c)
     ret = lsm6dso_xl_filter_lp2_set(&imu_dev_ctx, PROPERTY_ENABLE);
     if (ret != 0) { printf("IMU: LP2 filter failed\r\n"); return ret; }
 
-    /* Block data update */
+    /* Block data update prevents reading mismatched high/low bytes */
     ret = lsm6dso_block_data_update_set(&imu_dev_ctx, PROPERTY_ENABLE);
     if (ret != 0) { printf("IMU: BDU failed\r\n"); return ret; }
 
@@ -162,6 +206,14 @@ int32_t IMU_Init(I2C_HandleTypeDef *hi2c)
     return 0;
 }
 
+/*
+ * Reads one accel and one gyro sample from the sensor, converts raw counts to
+ * mg and mdps using the driver's fixed-point conversion helpers, then passes
+ * both through their respective software IIR LPFs. Returns zeroed data if the
+ * IMU has not been initialised successfully.
+ * Input:  out — destination for filtered accel_x/y/z_mg and gyro_x/y/z_mdps
+ * Output: 0 on success, non-zero on I2C read failure
+ */
 int32_t IMU_Read(IMU_Data_t *out)
 {
     if (!out) return -1;
@@ -198,6 +250,15 @@ int32_t IMU_Read(IMU_Data_t *out)
     return 0;
 }
 
+/*
+ * Reads one IMU sample and computes roll and pitch angles from the accelerometer
+ * axes using atan2. Subtracts mounting bias constants and negates the result so
+ * the sign convention matches the robot body frame:
+ *   roll  positive = right side higher
+ *   pitch positive = nose higher
+ * Input:  out_roll_deg, out_pitch_deg — pointers for results (NULL = skip that axis)
+ * Output: angles in degrees via output pointers
+ */
 void IMU_GetAngles(float *out_roll_deg, float *out_pitch_deg)
 {
     IMU_Data_t d;
@@ -209,12 +270,4 @@ void IMU_GetAngles(float *out_roll_deg, float *out_pitch_deg)
      * roll: right side lower → negative   pitch: nose lower → negative */
     if (out_roll_deg)  *out_roll_deg  = -(atan2f(ax, az) * (180.0f / 3.14159f) - IMU_ROLL_BIAS_DEG);
     if (out_pitch_deg) *out_pitch_deg = -(atan2f(ay, az) * (180.0f / 3.14159f) - IMU_PITCH_BIAS_DEG);
-}
-
-void IMU_Print(const IMU_Data_t *data)
-{
-    if (data)
-        printf("IMU | A: %+6.1f %+6.1f %+6.1f mg | G: %+7.1f %+7.1f %+7.1f mdps\r\n",
-               data->accel_x_mg, data->accel_y_mg, data->accel_z_mg,
-               data->gyro_x_mdps, data->gyro_y_mdps, data->gyro_z_mdps);
 }

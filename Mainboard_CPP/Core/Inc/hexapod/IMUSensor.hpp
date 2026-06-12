@@ -9,7 +9,6 @@ public:
 
     bool init(I2C_HandleTypeDef *hi2c);
     bool read();
-    void getAngles(float &roll_deg, float &pitch_deg) const;
 
     const IMU_Data_t& data() const { return _data; }
 };

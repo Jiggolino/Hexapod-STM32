@@ -10,6 +10,4 @@ public:
     int8_t read();
 
     uint16_t distanceMm()   const { return _data.distance_mm; }
-    bool     isValid()      const { return _data.range_status == 0; }
-    const TOF_Data_t& data() const { return _data; }
 };

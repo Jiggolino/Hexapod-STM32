@@ -10,9 +10,6 @@ public:
 
     bool init();
     void setAngle(uint8_t ch, float deg);
-    void setPulse(uint8_t ch, uint16_t us);
-    void sleep();
-    void wake();
 
     PCA9685_t* handle() { return &_dev; }
 };

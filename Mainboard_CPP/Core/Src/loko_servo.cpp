@@ -1,7 +1,7 @@
 /*
  * loko_servo.c  --  IK solve and servo output
  *
- * No debug prints – otherwise printf blocks UART RX and kills command response.
+ * No debug prints in the hot path — printf blocks UART RX and kills command response.
  */
 
 #include "loko_servo.h"
@@ -19,12 +19,27 @@ static inline float clampf(float x, float lo, float hi)
     return x < lo ? lo : x > hi ? hi : x;
 }
 
-
+/*
+ * For every active leg: resolves the foot target into body-frame coordinates,
+ * applies the IMU stabiliser correction (STAB_LEVEL: roll/pitch tilt;
+ * STAB_STABLE: horizontal body shift), runs the 3-DOF closed-form IK solver,
+ * converts joint angles to servo degrees with per-joint trim offsets, clamps
+ * to [SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG], then writes all channels to
+ * the appropriate PCA9685 board. A throttled debug line is printed every
+ * LOKO_SERVO_PRINT_EVERY calls.
+ *
+ * STAB_STABLE shift convention:
+ *   Right-side legs get −shift_x; left-side get +shift_x. This creates a
+ *   differential body tilt (COM shift) rather than a pure translation.
+ *   shift_y is applied identically on both sides.
+ *
+ * Input:  st — LokoState with populated leg targets, body pose, and PCA handles
+ * Output: void (st->error_flags updated on IK failure)
+ */
 void loko_solve_and_write(LokoState *st)
 {
     if (!st->enabled) return;
 
-    /* Get IMU stabilizer outputs (only one pair is non-zero per mode) */
     float stable_roll = 0.0f, stable_pitch = 0.0f;
     float shift_x = 0.0f, shift_y = 0.0f;
     loko_get_stabilizer_angles(&stable_roll, &stable_pitch);
@@ -38,7 +53,6 @@ void loko_solve_and_write(LokoState *st)
     for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
         LokoLeg *L = &st->legs[i];
 
-        /* Resolve target into body-frame offset from pivot */
         Vector3f leg_point;
         if (L->target_is_body_frame) {
             leg_point.x = L->target.x - L->pivot_x;
@@ -56,10 +70,8 @@ void loko_solve_and_write(LokoState *st)
         leg_point.x += (L->on_right_board ? -shift_x : shift_x);
         leg_point.y += -shift_y;
 
-        /* Invert yaw for left-side legs */
         float leg_yaw = L->on_right_board ? st->body_yaw : -st->body_yaw;
 
-        /* Apply body tilt + height (STAB_LEVEL roll/pitch, or zero in STAB_STABLE) */
         Vector3f mount_pos = { L->pivot_x, L->pivot_y, 0.0f };
         Vector3f out_ik;
         prepare_for_ik(leg_point, mount_pos,
@@ -72,31 +84,27 @@ void loko_solve_and_write(LokoState *st)
         L->foot_y = out_ik.y;
         L->foot_z = out_ik.z;
 
-        /* IK solve */
         IKResult r = hex_leg_ik(&L->ik_cfg,
                                 L->foot_x, L->foot_y, L->foot_z,
                                 &L->theta1, &L->theta2, &L->theta3);
-        if (r == IK_UNREACHABLE)      st->error_flags |= LOKO_ERR_IK_UNREACHABLE;
+        if (r == IK_UNREACHABLE)        st->error_flags |= LOKO_ERR_IK_UNREACHABLE;
         else if (r == IK_OUT_OF_LIMITS) st->error_flags |= LOKO_ERR_IK_OUT_OF_LIMITS;
 
-        /* status character for prints */
-        if (r == IK_OK) status[i] = '.';
+        if (r == IK_OK)           status[i] = '.';
         else if (r == IK_UNREACHABLE) status[i] = 'R';
-        else                         status[i] = 'L';
+        else                          status[i] = 'L';
 
-        /* Convert to servo degrees and clamp to physical travel */
         coxa_deg[i]  = clampf(L->coxa_scale  * L->theta1 + L->coxa_offset_deg,  SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);
         femur_deg[i] = clampf(L->femur_scale * L->theta2 + L->femur_offset_deg, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);
         tibia_deg[i] = clampf(L->tibia_scale * L->theta3 + L->tibia_offset_deg, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);
     }
 
-    /* Front leg horizontal rotation in 4-leg modes */
+    /* In 4-leg modes the front legs rotate outward to clear the body */
     if (st->state == LOKO_STAND_4_LEGS || st->state == LOKO_WALK_4_LEGS) {
-        coxa_deg[0] = clampf(coxa_deg[0] + LOKO_COXA_4LEG_OFFSET_DEG, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);  /* FR */
-        coxa_deg[5] = clampf(coxa_deg[5] - LOKO_COXA_4LEG_OFFSET_DEG, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);  /* FL */
+        coxa_deg[0] = clampf(coxa_deg[0] + LOKO_COXA_4LEG_OFFSET_DEG, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);
+        coxa_deg[5] = clampf(coxa_deg[5] - LOKO_COXA_4LEG_OFFSET_DEG, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);
     }
 
-    /* Build and send the debug line (throttled by LOKO_SERVO_PRINT_EVERY) */
     static uint32_t s_print_count = 0;
     if (++s_print_count >= LOKO_SERVO_PRINT_EVERY) {
         s_print_count = 0;
@@ -112,10 +120,9 @@ void loko_solve_and_write(LokoState *st)
             if (pos >= (int)sizeof(line)) break;
         }
         pos += snprintf(line + pos, sizeof(line) - pos, "\r\n");
-        printf("%s", line);   // now goes through DMA ring buffer
+        printf("%s", line);
     }
 
-    /* Drive the servos */
     for (int i = 0; i < LOKO_NUM_LEGS; ++i) {
         LokoLeg *L = &st->legs[i];
         PCA9685_t *board = L->on_right_board ? st->pca_right : st->pca_left;

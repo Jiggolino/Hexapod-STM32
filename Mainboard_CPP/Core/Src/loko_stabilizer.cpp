@@ -27,7 +27,7 @@
 
 #define DEG2RAD  (3.14159f / 180.0f)
 
-/* ── PID state (LEVEL mode) ─────────────────────────────────────────────────── */
+/* ── PID state (shared by both LEVEL and STABLE) ────────────────────────── */
 typedef struct {
     float integral;
     float prev_lpf;
@@ -37,27 +37,38 @@ typedef struct {
 static PIDState s_level_roll  = {0};
 static PIDState s_level_pitch = {0};
 
-/* ── STABLE mode output LPF state ───────────────────────────────────────────── */
+/* ── STABLE mode output LPF state ───────────────────────────────────────── */
 static float s_stable_lpf_x = 0.0f;
 static float s_stable_lpf_y = 0.0f;
 
+/*
+ * Zeros all PID integrator and LPF state for one axis.
+ * Input:  s — PIDState to reset
+ * Output: void
+ */
 static void pid_reset(PIDState *s)
 {
     s->integral = s->prev_lpf = s->lpf = 0.0f;
 }
 
+/*
+ * Runs one PID tick with a non-linear adaptive LPF on the error signal.
+ * The LPF alpha scales with |error|² relative to max_err, making the filter
+ * more responsive at small errors and less aggressive at large sudden changes.
+ *   alpha = base + (1−base) * (|err| / max_err)²
+ * Input:  s        — PID integrator and LPF state
+ *         err      — error signal (desired − measured)
+ *         kp,ki,kd — PID gains
+ *         i_clamp  — integrator anti-windup clamp
+ *         dt       — time step in seconds
+ * Output: PID output value
+ */
 static float pid_tick(PIDState *s,
                       float err,
                       float kp, float ki, float kd,
                       float i_clamp,
                       float dt)
 {
-    /* Non-linear alpha: scales with |error| relative to max tilt.
-     * Small errors get a larger fraction of STAB_LPF_ALPHA (more responsive).
-     * Large sudden changes stay smooth (capped at STAB_LPF_ALPHA).
-     * Formula: alpha = base + (1-base) * (|err| / max_err)^2
-     * At zero error: alpha = base (minimum smoothing, most responsive)
-     * At max error:  alpha = 1.0  (full step, fastest possible)              */
     float max_err = STAB_MAX_TILT_DEG * (3.14159f / 180.0f);
     float t       = err / max_err;
     if (t < 0.0f) t = -t;
@@ -80,8 +91,12 @@ static inline float clampf(float v, float lo, float hi)
     return v < lo ? lo : v > hi ? hi : v;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────── */
-
+/*
+ * Populates a LokoStabilizerConfig with the maximum tilt, shift, and wave-mode
+ * disable flag from loko_config.h constants.
+ * Input:  cfg — config struct to initialise
+ * Output: void
+ */
 void loko_stabilizer_init(LokoStabilizerConfig *cfg)
 {
     cfg->max_roll_rad      = STAB_MAX_TILT_DEG * DEG2RAD;
@@ -90,6 +105,26 @@ void loko_stabilizer_init(LokoStabilizerConfig *cfg)
     cfg->wave_disable      = 1;
 }
 
+/*
+ * Computes stabiliser correction for one control tick.
+ *
+ * Converts raw accelerometer data to roll/pitch angles via atan2, applies a
+ * dead-zone to suppress noise, then skips PID updates when IMU data is stale
+ * (repeated sample guard). In STAB_LEVEL mode the correction is a tilt angle
+ * (roll/pitch in radians) written to out_roll/out_pitch. In STAB_STABLE mode
+ * the correction is a horizontal shift in mm written to out_shift_x/y_mm.
+ * All outputs are zero-initialised before processing and cleared entirely if
+ * stab_mode is STAB_OFF or if wave gait is active with wave_disable set.
+ *
+ * Input:  cfg          — max limits and wave_disable flag
+ *         imu_data     — latest accel/gyro sample in mg and mdps
+ *         gait_mode    — current gait (suppresses correction in WAVE if flagged)
+ *         stab_mode    — STAB_OFF / STAB_STABLE / STAB_LEVEL
+ *         is_walking   — 1 if legs are cycling (scales gains down in LEVEL mode)
+ *         dt           — time step in seconds
+ * Output: out_roll, out_pitch      — body tilt angles in rad (STAB_LEVEL only)
+ *         out_shift_x/y_mm        — body shift in mm (STAB_STABLE only)
+ */
 void loko_stabilizer_update(const LokoStabilizerConfig *cfg,
                             const IMU_Data_t           *imu_data,
                             LokoGaitMode                gait_mode,
@@ -133,7 +168,7 @@ void loko_stabilizer_update(const LokoStabilizerConfig *cfg,
     float pitch_rad = clampf((atan2f(ay_g, az_g) - IMU_PITCH_BIAS_DEG * DEG2RAD),
                              -cfg->max_pitch_rad, cfg->max_pitch_rad);
 
-    /* Deadzone: suppress correction within the noise band. */
+    /* Dead-zone: suppress correction within the sensor noise band */
     if      (pitch_rad >  STAB_DEADZONE_RAD) pitch_rad -= STAB_DEADZONE_RAD;
     else if (pitch_rad < -STAB_DEADZONE_RAD) pitch_rad += STAB_DEADZONE_RAD;
     else    pitch_rad = 0.0f;
@@ -142,7 +177,7 @@ void loko_stabilizer_update(const LokoStabilizerConfig *cfg,
     else if (roll_rad < -STAB_DEADZONE_RAD) roll_rad += STAB_DEADZONE_RAD;
     else    roll_rad = 0.0f;
 
-    /* Stale-sample guard: don't advance integrals on repeated IMU data. */
+    /* Stale-sample guard: don't advance integrals on repeated IMU data */
     static float prev_ax = 0.0f, prev_ay = 0.0f;
     int fresh = (imu_data->accel_x_mg != prev_ax || imu_data->accel_y_mg != prev_ay);
     prev_ax = imu_data->accel_x_mg;
@@ -150,11 +185,10 @@ void loko_stabilizer_update(const LokoStabilizerConfig *cfg,
     float pid_dt = fresh ? dt : 0.0f;
 
     if (stab_mode == STAB_LEVEL) {
-        /* ── LEVEL: rotate body opposite to tilt so platform stays level ── */
         s_stable_lpf_x = s_stable_lpf_y = 0.0f;
 
-        /* While walking, slow the loop ~10× so per-step bobbing noise is
-         * averaged out but slow terrain tilt is still corrected. */
+        /* While walking, slow the loop ~10× so per-step bobbing is averaged
+         * out but slow terrain tilt is still corrected. */
         float gscale = is_walking ? STAB_LEVEL_WALK_GAIN_SCALE : 1.0f;
         float kp = STAB_LEVEL_KP * gscale;
         float ki = STAB_LEVEL_KI * gscale;
@@ -167,9 +201,6 @@ void loko_stabilizer_update(const LokoStabilizerConfig *cfg,
         *out_pitch = clampf(p, -cfg->max_pitch_rad, cfg->max_pitch_rad);
 
     } else { /* STAB_STABLE */
-        /* ── STABLE: same PID as LEVEL, outputs shift distance ──
-         * PID corrects measured tilt toward zero; output is shift in mm.
-         */
         float r = pid_tick(&s_level_roll,  roll_rad,  STAB_STABLE_KP, STAB_STABLE_KI, STAB_STABLE_KD, STAB_STABLE_I_CLAMP_RAD, pid_dt);
         float p = pid_tick(&s_level_pitch, pitch_rad, STAB_STABLE_KP, STAB_STABLE_KI, STAB_STABLE_KD, STAB_STABLE_I_CLAMP_RAD, pid_dt);
 

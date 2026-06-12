@@ -23,8 +23,6 @@ public:
     HexapodRobot(I2C_HandleTypeDef *hi2c,
                  TIM_HandleTypeDef *htim,
                  UART_HandleTypeDef *huart,
-                 ADC_HandleTypeDef *hadc1,
-                 ADC_HandleTypeDef *hadc2,
                  ADC_HandleTypeDef *hadc3);
 
     bool init();
@@ -34,8 +32,6 @@ private:
     I2C_HandleTypeDef  *_hi2c;
     TIM_HandleTypeDef  *_htim;
     UART_HandleTypeDef *_huart;
-    ADC_HandleTypeDef  *_hadc1;
-    ADC_HandleTypeDef  *_hadc2;
     ADC_HandleTypeDef  *_hadc3;
 
     uint32_t _errFlags;

@@ -74,6 +74,7 @@ static void MPU_Config(void);
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
   /* OE-pin priming moved to USER CODE BEGIN SysInit (after HAL_Init +
    * SystemClock_Config). The previous location ran before the supply

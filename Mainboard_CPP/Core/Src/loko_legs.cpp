@@ -22,6 +22,14 @@
 #include "loko_config.h"
 #include <math.h>
 
+/*
+ * Populates all six LokoLeg entries in st with physical geometry, IK limits,
+ * servo channel mappings, initial gait phase offsets, and scale/offset values
+ * for degree-to-servo conversion.  Left-side legs (3–5) get mirrored scale
+ * factors so all joints move symmetrically.
+ * Input:  st — LokoState whose legs[] array is written (must not be NULL)
+ * Output: void
+ */
 void loko_build_default_legs(LokoState *st)
 {
     /* Right-side legs have negative pivot_y (body +Y = left). */
@@ -65,14 +73,12 @@ void loko_build_default_legs(LokoState *st)
         L->ik_cfg.t3_max = TIBIA_MAX_RAD;
 
         L->neutral_x = NEUTRAL_REACH_MM;
-
         L->neutral_y = 0.0f;
         L->neutral_z = neutral_z;
 
-        /* Initialize target to neutral stance */
         L->target.x = L->neutral_x;
         L->target.y = L->neutral_y;
-        L->target.z = 0.0f; /* 0 = on ground */
+        L->target.z = 0.0f;
         L->target_is_body_frame = 0;
 
         L->pivot_x   = pivot_x[i];
@@ -89,13 +95,12 @@ void loko_build_default_legs(LokoState *st)
         L->servo_ch_femur = ch_femur[i];
         L->servo_ch_tibia = ch_tibia[i];
 
-        /* Mirror the servos on the left side (legs 3, 4, 5).
-         * All joint directions are flipped for proper left-right symmetry. */
+        /* Mirror servo directions on left-side legs (3, 4, 5) for symmetry. */
         const float side_dir    = (i < 3) ? 1.0f : -1.0f;
         L->coxa_scale           = side_dir * COXA_DIR  * RAD2DEG;
         L->femur_scale          = side_dir * FEMUR_DIR * RAD2DEG;
         L->tibia_scale          = side_dir * TIBIA_DIR * RAD2DEG;
-        
+
         L->coxa_offset_deg  = SERVO_BASE_COXA_DEG;
         L->femur_offset_deg = SERVO_BASE_FEMUR_DEG;
         L->tibia_offset_deg = (i < 3) ? SERVO_BASE_TIBIA_RIGHT_DEG : SERVO_BASE_TIBIA_LEFT_DEG;

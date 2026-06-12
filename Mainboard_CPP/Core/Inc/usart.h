@@ -33,7 +33,6 @@ extern "C" {
 /* USER CODE END Includes */
 
 extern UART_HandleTypeDef huart1;
-extern DMA_HandleTypeDef  hdma_usart1_tx;
 
 /* USER CODE BEGIN Private defines */
 
@@ -42,7 +41,7 @@ extern DMA_HandleTypeDef  hdma_usart1_tx;
 void MX_USART1_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-
+extern DMA_HandleTypeDef hdma_usart1_tx;
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

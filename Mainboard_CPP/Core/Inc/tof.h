@@ -39,9 +39,6 @@ int8_t TOF_Init(I2C_HandleTypeDef *hi2c);
  */
 int8_t TOF_Read(TOF_Data_t *out);
 
-/** @brief  Print ToF data over UART. */
-void TOF_Print(const TOF_Data_t *data);
-
 #ifdef __cplusplus
 }
 #endif

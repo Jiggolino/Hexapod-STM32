@@ -1,12 +1,15 @@
 /**
  * @file  uart_protocol.c
  * @brief See uart_protocol.h for the wire format.
+ *
+ * All messages use the format /CATEGORY/ARG\n
+ * Incoming lines are parsed from an ISR-filled ring buffer.
+ * Outgoing data is written via the DMA TX ring buffer (uart_dma_tx.c).
  */
 
 #include "uart_protocol.h"
 #include "battery.h"
 #include "main.h"
-#include "current.h"
 #include "uart_dma_tx.h"
 #include "loko_states.h"
 
@@ -15,12 +18,9 @@
 #include <string.h>
 #include <stdint.h>
 
-/* ─── tunables ───────────────────────────────────────────────────── */
-#define UART_RX_BUF_LEN     256u     /* longest line is /SERVO/18x"-180.00," ≈ 160 bytes */
-#define STREAM_PERIOD_MS    20u      /* 50 Hz */
+#define UART_RX_BUF_LEN     256u
+#define STREAM_PERIOD_MS    20u      /* 50 Hz telemetry rate */
 
-
-/* ─── module state ───────────────────────────────────────────────── */
 static UART_Protocol_Config_t s_cfg;
 
 #define RX_RING_SIZE 1024u
@@ -32,20 +32,18 @@ static struct {
 
 static char     s_rx_buf[UART_RX_BUF_LEN];
 static uint16_t s_rx_idx;
-static uint8_t  s_rx_overflow;   /* drop current line if it exceeded the buffer */
+static uint8_t  s_rx_overflow;
 
 static uint8_t  s_stream_on;
 static uint32_t s_stream_next_ms;
 
 static UART_RobotState_t      s_state;
 static UART_ControllerState_t s_controller;
-static UART_LED_t             s_led_right[3];
-static UART_LED_t             s_led_left[3];
 static UART_LED_t             s_led_ctrl;
 
-/* ─── printf retarget ────────────────────────────────────────────── */
-/* Full Newlib calls _write; Newlib Nano walks character-by-character
- * through __io_putchar. Both are provided so either libc works. */
+/* ─── printf retarget ────────────────────────────────────────────────────── */
+/* Full Newlib calls _write; Newlib Nano walks character-by-character through
+ * __io_putchar.  Both are provided so either libc variant works. */
 
 extern "C" int _write(int file, char *ptr, int len) {
     (void)file;
@@ -60,7 +58,16 @@ extern "C" int __io_putchar(int ch)
     return ch;
 }
 
-/* ─── tokenisers (destructive: they modify 'str' in place) ───────── */
+/* ─── tokenisers (destructive: they modify 'str' in place) ──────────────── */
+
+/*
+ * Splits str on commas, converts each token to float via strtof, and stores
+ * exactly n values in out[]. Rejects tokens with trailing non-whitespace chars.
+ * Input:  str — null-terminated comma-separated string (modified in place)
+ *         out — output array of at least n floats
+ *         n   — expected number of fields
+ * Output: 1 if exactly n valid floats were parsed, 0 otherwise
+ */
 static int parse_floats(char *str, float *out, int n)
 {
     if (!str) return 0;
@@ -71,15 +78,22 @@ static int parse_floats(char *str, float *out, int n)
         if (count >= n) return 0;
         char *end;
         float v = strtof(tok, &end);
-        if (end == tok) return 0;                 /* no digits */
+        if (end == tok) return 0;
         while (*end == ' ' || *end == '\t') end++;
-        if (*end != '\0') return 0;               /* trailing junk */
+        if (*end != '\0') return 0;
         out[count++] = v;
         tok = strtok_r(NULL, ",", &save);
     }
     return (count == n);
 }
 
+/*
+ * Same as parse_floats() but uses strtol and stores integers.
+ * Input:  str — null-terminated comma-separated string (modified in place)
+ *         out — output array of at least n ints
+ *         n   — expected number of fields
+ * Output: 1 if exactly n valid integers were parsed, 0 otherwise
+ */
 static int parse_ints(char *str, int *out, int n)
 {
     if (!str) return 0;
@@ -99,7 +113,15 @@ static int parse_ints(char *str, int *out, int n)
     return (count == n);
 }
 
-/* ─── command handlers ───────────────────────────────────────────── */
+/* ─── command handlers ───────────────────────────────────────────────────── */
+
+/*
+ * /SERVO/EN   — enables servo power (OE low on both boards)
+ * /SERVO/DIS  — disables servo power (OE high)
+ * /SERVO/a,b,…,r — sets 9 right + 9 left channels from 18 float angles in degrees
+ * Input:  arg — string after the second '/'
+ * Output: void
+ */
 static void handle_servo(char *arg)
 {
     if (!arg) return;
@@ -123,6 +145,12 @@ static void handle_servo(char *arg)
     }
 }
 
+/*
+ * /STREAM/EN — starts 50 Hz telemetry streaming
+ * /STREAM/DIS — stops streaming
+ * Input:  arg — "EN" or "DIS"
+ * Output: void
+ */
 static void handle_stream(char *arg)
 {
     if (!arg) return;
@@ -130,29 +158,12 @@ static void handle_stream(char *arg)
     else if (strcmp(arg, "DIS") == 0) { s_stream_on = 0; }
 }
 
-void handle_current(char *arg)
-{
-    (void)arg;
-
-    float current_matrix[8][2];
-
-    get_current_servos(current_matrix);
-
-    // Print each row separated by commas
-    for (uint8_t i = 0; i < 8; i++) {
-        // Format: Index, RightValue, LeftValue
-        printf("%.3f", current_matrix[i][0]);
-    }
-    printf("\r\n");
-
-    // Print each row separated by commas
-    for (uint8_t i = 0; i < 8; i++) {
-        // Format: Index, RightValue, LeftValue
-        printf("%.3f", current_matrix[i][1]);
-    }
-    printf("\r\n");
-}
-
+/*
+ * /BATTERY/V — replies with pack voltage: /BATTERY/V/<float>
+ * /BATTERY/P — replies with SOC percent:  /BATTERY/P/<float>
+ * Input:  arg — "V" or "P"
+ * Output: void (prints to UART)
+ */
 static void handle_battery(char *arg)
 {
     if (!arg) return;
@@ -163,38 +174,21 @@ static void handle_battery(char *arg)
     }
 }
 
-static void handle_led_r(char *arg)
-{
-    int v[12];
-    if (!parse_ints(arg, v, 12)) return;
-    for (int i = 0; i < 3; i++) {
-        s_led_right[i].r          = (uint8_t)v[i*4 + 0];
-        s_led_right[i].g          = (uint8_t)v[i*4 + 1];
-        s_led_right[i].b          = (uint8_t)v[i*4 + 2];
-        s_led_right[i].brightness = (uint8_t)v[i*4 + 3];
-    }
-    /* TODO: push s_led_right[] to the right WS2812B strip on TIM1 / PA8. */
-}
-
-static void handle_led_l(char *arg)
-{
-    int v[12];
-    if (!parse_ints(arg, v, 12)) return;
-    for (int i = 0; i < 3; i++) {
-        s_led_left[i].r          = (uint8_t)v[i*4 + 0];
-        s_led_left[i].g          = (uint8_t)v[i*4 + 1];
-        s_led_left[i].b          = (uint8_t)v[i*4 + 2];
-        s_led_left[i].brightness = (uint8_t)v[i*4 + 3];
-    }
-    /* TODO: push s_led_left[] to the left WS2812B strip on TIM1 / PA9. */
-}
-
+/*
+ * /TOF/ — replies with the latest distance: /TOF/<mm>
+ * Output: void (prints to UART)
+ */
 static void handle_tof(char *arg)
 {
     (void)arg;
     printf("/TOF/%u\n", (unsigned)tof_get_distance_mm());
 }
 
+/*
+ * /IMU/ — replies with 6 values: accel_x/y/z (mg), gyro_x/y/z (mdps)
+ * Format: /IMU/<ax>,<ay>,<az>,<gx>,<gy>,<gz>
+ * Output: void (prints to UART)
+ */
 static void handle_imu(char *arg)
 {
     (void)arg;
@@ -205,6 +199,10 @@ static void handle_imu(char *arg)
            d.gyro_x_mdps, d.gyro_y_mdps, d.gyro_z_mdps);
 }
 
+/*
+ * /MODE/ — replies with the current gait mode name: /MODE/<name>
+ * Output: void (prints to UART)
+ */
 static void handle_mode(char *arg)
 {
     (void)arg;
@@ -221,6 +219,10 @@ static void handle_mode(char *arg)
     printf("/MODE/%s\n", gait_name);
 }
 
+/*
+ * /STAB/ — replies with the current stabiliser mode name: /STAB/<name>
+ * Output: void (prints to UART)
+ */
 static void handle_stab(char *arg)
 {
     (void)arg;
@@ -236,6 +238,10 @@ static void handle_stab(char *arg)
     printf("/STAB/%s\n", stab_name);
 }
 
+/*
+ * /TILT/ — replies with IMU roll and pitch in degrees: /TILT/<roll>,<pitch>
+ * Output: void (prints to UART)
+ */
 static void handle_tilt(char *arg)
 {
     (void)arg;
@@ -246,29 +252,34 @@ static void handle_tilt(char *arg)
     printf("/TILT/%.2f,%.2f\n", roll_deg, pitch_deg);
 }
 
+/*
+ * /STATE/<name> — updates the internal robot state flag.
+ * Accepted values: "Disarmed", "DISARMED", "ARMED", "AMRED" (typo accepted).
+ * Input:  arg — state name string
+ * Output: void
+ */
 static void handle_state(char *arg)
 {
     if (!arg) return;
     if (strcmp(arg, "Disarmed") == 0 || strcmp(arg, "DISARMED") == 0) {
         s_state = UART_STATE_DISARMED;
-        /* TODO: arming side-effects — probably force SERVO DIS and stop
-         * the locomotion pipeline so nothing moves while disarmed. */
     } else if (strcmp(arg, "ARMED") == 0 || strcmp(arg, "AMRED") == 0) {
-        /* accept the diagram's "AMRED" spelling and the correct one */
         s_state = UART_STATE_ARMED;
-        /* TODO: matching side-effects on entering ARMED. */
     }
-    /* FUTURE EXPANSION slot: silently accepted */
 }
 
-/* /CONTROLL payload: 10 ints per CONTROL_PROTOCOL.txt
- *   rsx, rsy, lsx, lsy, hat_x, hat_y, face, sticks, trig, back */
+/*
+ * /CONTROLL/<rsx>,<rsy>,<lsx>,<lsy>,<hat_x>,<hat_y>,<face>,<sticks>,<trig>,<back>
+ * Decodes 10 integers per CONTROL_PROTOCOL.txt. Stick axes are integers in
+ * [-100, 100] and are divided by 100 to produce the [-1, 1] floats that the
+ * locomotion engine expects.
+ * Input:  arg — comma-separated 10-integer string
+ * Output: void (updates s_controller)
+ */
 static void handle_controll(char *arg)
 {
     int v[10];
     if (!parse_ints(arg, v, 10)) return;
-    /* Sticks are sent as integers in [-100, 100] by the host.
-     * Divide by 100 to get the [-1, 1] float range the locomotion expects. */
     s_controller.right_stick_x   = (float)v[0] / 100.0f;
     s_controller.right_stick_y   = (float)v[1] / 100.0f;
     s_controller.left_stick_x    = (float)v[2] / 100.0f;
@@ -281,6 +292,13 @@ static void handle_controll(char *arg)
     s_controller.back_buttons    = (uint8_t)v[9];
 }
 
+/*
+ * /LEDC/<r>,<g>,<b>,<brightness> — stores the controller lightbar colour.
+ * The STM32 stores the value so the Pi can read it back; actual lightbar
+ * control lives on the Pi side.
+ * Input:  arg — 4-integer string
+ * Output: void (updates s_led_ctrl)
+ */
 static void handle_ledc(char *arg)
 {
     int v[4];
@@ -289,34 +307,34 @@ static void handle_ledc(char *arg)
     s_led_ctrl.g          = (uint8_t)v[1];
     s_led_ctrl.b          = (uint8_t)v[2];
     s_led_ctrl.brightness = (uint8_t)v[3];
-    /* The controller lightbar lives on the Pi side — the STM32 just stores
-     * the latest value so the Pi can read it back if it needs to. Nothing
-     * else to do here unless a dedicated channel gets added. */
 }
 
-/* ─── line dispatch ──────────────────────────────────────────────── */
+/* ─── line dispatch ──────────────────────────────────────────────────────── */
+
+/*
+ * Splits a complete received line at the second '/', looks up the category
+ * string, and calls the matching handler. Lines not starting with '/' are
+ * silently dropped. Unknown categories are also silently dropped.
+ * Input:  line — null-terminated string (modified in place)
+ * Output: void
+ */
 static void dispatch_line(char *line)
 {
-    if (line[0] != '/') return;                   /* must start with '/' */
+    if (line[0] != '/') return;
 
     char *cat = line + 1;
     char *arg = strchr(cat, '/');
-    if (arg) { *arg = '\0'; arg++; }              /* split category / arg */
+    if (arg) { *arg = '\0'; arg++; }
 
-    /* trim trailing \r and whitespace on the argument */
     if (arg) {
         size_t n = strlen(arg);
-        while (n && (arg[n-1] == '\r' || arg[n-1] == ' ' || arg[n-1] == '\t')) {
+        while (n && (arg[n-1] == '\r' || arg[n-1] == ' ' || arg[n-1] == '\t'))
             arg[--n] = '\0';
-        }
     }
 
     if      (strcmp(cat, "SERVO")    == 0) handle_servo   (arg);
     else if (strcmp(cat, "STREAM")   == 0) handle_stream  (arg);
-    else if (strcmp(cat, "CURRENT")  == 0) handle_current (arg);
     else if (strcmp(cat, "BATTERY")  == 0) handle_battery (arg);
-    else if (strcmp(cat, "LED_R")    == 0) handle_led_r   (arg);
-    else if (strcmp(cat, "LED_L")    == 0) handle_led_l   (arg);
     else if (strcmp(cat, "TOF")      == 0) handle_tof     (arg);
     else if (strcmp(cat, "IMU")      == 0) handle_imu     (arg);
     else if (strcmp(cat, "MODE")     == 0) handle_mode    (arg);
@@ -325,21 +343,26 @@ static void dispatch_line(char *line)
     else if (strcmp(cat, "STATE")    == 0) handle_state   (arg);
     else if (strcmp(cat, "CONTROLL") == 0) handle_controll(arg);
     else if (strcmp(cat, "LEDC")     == 0) handle_ledc    (arg);
-    /* unknown category → silent drop */
 }
 
-/* ─── RX polling ─────────────────────────────────────────────────── */
+/* ─── RX polling ─────────────────────────────────────────────────────────── */
+
+/*
+ * Drains bytes from the ISR ring buffer into a line accumulation buffer.
+ * On '\n' or '\r' the accumulated line is dispatched if not overflowed.
+ * Printable ASCII bytes (32–126) are accepted; all other control codes are
+ * silently ignored. Hardware ORE/NE/FE error flags are cleared on each call.
+ * Output: void
+ */
 static void rx_poll(void)
 {
-    /* Drain the ring buffer populated by the ISR */
     while (s_rx_ring.head != s_rx_ring.tail)
     {
         uint8_t c = s_rx_ring.buf[s_rx_ring.tail];
         s_rx_ring.tail = (uint16_t)((s_rx_ring.tail + 1) % RX_RING_SIZE);
 
-        // Check for EOL: Handle \n (Linux) or \r (Mac/Terminal)
         if (c == '\n' || c == '\r') {
-            if (s_rx_idx > 0) { // Only dispatch if we have data
+            if (s_rx_idx > 0) {
                 if (!s_rx_overflow) {
                     s_rx_buf[s_rx_idx] = '\0';
                     dispatch_line(s_rx_buf);
@@ -347,9 +370,7 @@ static void rx_poll(void)
                 s_rx_idx      = 0;
                 s_rx_overflow = 0;
             }
-        }
-        // Ignore null bytes or other control chars if necessary
-        else if (c >= 32 && c <= 126) {
+        } else if (c >= 32 && c <= 126) {
             if (s_rx_idx < UART_RX_BUF_LEN - 1) {
                 s_rx_buf[s_rx_idx++] = (char)c;
             } else {
@@ -358,7 +379,6 @@ static void rx_poll(void)
         }
     }
 
-    /* Check for hardware errors on the UART itself */
     if (__HAL_UART_GET_FLAG(s_cfg.huart, UART_FLAG_ORE) ||
         __HAL_UART_GET_FLAG(s_cfg.huart, UART_FLAG_NE)  ||
         __HAL_UART_GET_FLAG(s_cfg.huart, UART_FLAG_FE))
@@ -367,13 +387,17 @@ static void rx_poll(void)
     }
 }
 
-/** Called from USART1_IRQHandler to push bytes into the ring buffer. */
+/*
+ * Called from USART1_IRQHandler on every RXNE interrupt. Reads one byte from
+ * the UART data register and pushes it into the ring buffer if space is
+ * available; otherwise the byte is dropped. Clears framing/noise/overrun errors.
+ * Output: void (s_rx_ring.head advanced)
+ */
 void UART_Protocol_RX_Callback(void)
 {
     UART_HandleTypeDef *huart = s_cfg.huart;
     if (!huart) return;
 
-    /* Check RXNE flag */
     if (__HAL_UART_GET_FLAG(huart, UART_FLAG_RXNE)) {
         uint8_t c = (uint8_t)(huart->Instance->RDR & 0xFFu);
         uint16_t next = (uint16_t)((s_rx_ring.head + 1) % RX_RING_SIZE);
@@ -383,7 +407,6 @@ void UART_Protocol_RX_Callback(void)
         }
     }
 
-    /* Clean up errors that block reception */
     if (__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) ||
         __HAL_UART_GET_FLAG(huart, UART_FLAG_NE)  ||
         __HAL_UART_GET_FLAG(huart, UART_FLAG_FE)) {
@@ -391,7 +414,16 @@ void UART_Protocol_RX_Callback(void)
     }
 }
 
-/* ─── streaming telemetry (50 Hz when enabled) ───────────────────── */
+/* ─── streaming telemetry ────────────────────────────────────────────────── */
+
+/*
+ * Sends one 50 Hz telemetry frame if streaming is enabled and the next
+ * deadline has passed. Frame format (all on one line):
+ *   /STREAM/<r1..r9 currents>,<l1..l9 currents>,<Vbatt>,<SOC%>,<ToF mm>,
+ *           <ax>,<ay>,<az mg>,<gx>,<gy>,<gz mdps>
+ * Current fields are always 0.0 (no current sensing on this board revision).
+ * Output: void (prints to UART via DMA ring buffer)
+ */
 static void stream_tick(void)
 {
     if (!s_stream_on) return;
@@ -399,11 +431,10 @@ static void stream_tick(void)
     if ((int32_t)(now - s_stream_next_ms) < 0) return;
     s_stream_next_ms = now + STREAM_PERIOD_MS;
 
-    /* Format: 18 currents, battery V, battery %, 1 TOF distance, 6 IMU. */
     printf("/STREAM/");
 
-    for (int i = 0; i < 9; i++) printf("%.3f,", 0.0f);   /* r1..r9 currents */
-    for (int i = 0; i < 9; i++) printf("%.3f,", 0.0f);   /* l1..l9 currents */
+    for (int i = 0; i < 9; i++) printf("%.3f,", 0.0f);
+    for (int i = 0; i < 9; i++) printf("%.3f,", 0.0f);
 
     float v = Battery_GetVoltage();
     printf("%.2f,%.1f,", v, Battery_GetPercentageF(v));
@@ -417,7 +448,14 @@ static void stream_tick(void)
            d.gyro_x_mdps, d.gyro_y_mdps, d.gyro_z_mdps);
 }
 
-/* ─── public API ─────────────────────────────────────────────────── */
+/* ─── public API ─────────────────────────────────────────────────────────── */
+
+/*
+ * Copies the config, zeroes all RX/TX state, enables the RXNE interrupt, and
+ * sets stdout unbuffered so printf replies arrive at the host immediately.
+ * Input:  cfg — {huart, pca_right, pca_left, loko} used by command handlers
+ * Output: void
+ */
 void UART_Protocol_Init(const UART_Protocol_Config_t *cfg)
 {
     s_cfg = *cfg;
@@ -429,25 +467,25 @@ void UART_Protocol_Init(const UART_Protocol_Config_t *cfg)
     s_stream_next_ms = 0;
     s_state          = UART_STATE_DISARMED;
     memset(&s_controller, 0, sizeof(s_controller));
-    memset(s_led_right,   0, sizeof(s_led_right));
-    memset(s_led_left,    0, sizeof(s_led_left));
     memset(&s_led_ctrl,   0, sizeof(s_led_ctrl));
 
-    /* Enable RXNE interrupt */
     __HAL_UART_ENABLE_IT(s_cfg.huart, UART_IT_RXNE);
 
-    /* unbuffered so replies go out immediately */
     setvbuf(stdout, NULL, _IONBF, 0);
 }
 
+/*
+ * Main protocol service routine. Drains the RX ring buffer and optionally
+ * emits one telemetry frame. Call every control cycle (~100 Hz).
+ * Output: void
+ */
 void UART_Update(void)
 {
     rx_poll();
     stream_tick();
 }
 
+/* Simple accessors for module state */
 const UART_ControllerState_t *UART_GetController(void)    { return &s_controller; }
 UART_RobotState_t             UART_GetState(void)         { return s_state; }
-const UART_LED_t             *UART_GetRightLEDs(void)     { return s_led_right; }
-const UART_LED_t             *UART_GetLeftLEDs(void)      { return s_led_left; }
 const UART_LED_t             *UART_GetControllerLED(void) { return &s_led_ctrl; }
